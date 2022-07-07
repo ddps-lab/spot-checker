@@ -1,6 +1,7 @@
 import boto3
 import random
 import pickle
+import numpy as np
 import pandas as pd
 from tqdm import tqdm
 from io import StringIO
@@ -14,7 +15,6 @@ BUCKET_SPS = 'sps-data'
 BUCKET_SPOTINFO = 'spotinfo-data'
 
 # get most recent sps, spotinfo data
-
 top_n = 5
 
 pagenator = s3_client.get_paginator('list_objects').paginate(Bucket=BUCKET_SPS, Prefix='data/')
@@ -92,12 +92,27 @@ join_df = join_df[['InstanceClass', 'InstanceFamily', 'InstanceType', 'Region', 
 cheap_workload = join_df[join_df['Price'] <= 1]
 expensive_workload = join_df[join_df['Price'] > 1]
 
-workload_list = []
-cheap_workload_min = cheap_workload.groupby(by=['InstanceFamily', 'Region']).min()
-for idx, row in cheap_workload_min.iterrows():
+msk = np.random.rand(len(cheap_workload)) < 0.5
+cheap_workload_1 = cheap_workload[msk]
+cheap_workload_2 = cheap_workload[~msk]
+
+workload_list_1 = []
+cheap_workload_min_1 = cheap_workload_1.groupby(by=['InstanceFamily', 'Region']).min()
+for idx, row in cheap_workload_min_1.iterrows():
     workload_info = f"{row['InstanceType']} {idx[1]} {row['AvailabilityZoneId']}"
-    workload_list.append(workload_info)
+    workload_list_1.append(workload_info)
+
+workload_list_2 = []
+cheap_workload_min_2 = cheap_workload_2.groupby(by=['InstanceFamily', 'Region']).min()
+for idx, row in cheap_workload_min_2.iterrows():
+    workload_info = f"{row['InstanceType']} {idx[1]} {row['AvailabilityZoneId']}"
+    workload_list_2.append(workload_info)
+
     
-with open(f'./data/workloads_{len(cheap_workload_min)}.txt', 'w') as file:
-    file.write('\n'.join(workload_list))
+with open(f'./data/workloads_{len(cheap_workload_min_1)}_1.txt', 'w') as file:
+    file.write('\n'.join(workload_list_1))
+    file.close()
+    
+with open(f'./data/workloads_{len(cheap_workload_min_2)}_2.txt', 'w') as file:
+    file.write('\n'.join(workload_list_2))
     file.close()
