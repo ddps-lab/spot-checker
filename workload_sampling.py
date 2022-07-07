@@ -6,12 +6,12 @@ from tqdm import tqdm
 from io import StringIO
 
 # boto3 setting
-session = boto3.session.Session(profile_name='dev-profile')
+session = boto3.session.Session(profile_name='default')
 s3_client = session.client('s3')
 s3_resource = session.resource('s3')
 
-BUCKET_SPS = 'sps-data-bucket'
-BUCKET_SPOTINFO = 'spotinfo-data-bucket'
+BUCKET_SPS = 'sps-data'
+BUCKET_SPOTINFO = 'spotinfo-data'
 
 # get most recent sps, spotinfo data
 
@@ -37,7 +37,7 @@ sps_df = sps_df.sort_values(by=['TimeStamp', 'InstanceType', 'Region', 'Availabi
 
 pickle.dump(sps_df, open('./sps_df.pkl', 'wb'))
 
-session = boto3.session.Session(profile_name='dev-profile')
+session = boto3.session.Session(profile_name='default')
 s3_client = session.client('s3')
 s3_resource = session.resource('s3')
 

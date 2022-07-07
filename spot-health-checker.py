@@ -11,7 +11,7 @@ from pathlib import Path
 region_ami = pickle.load(open('./data/region_ami_dict.pkl', 'rb')) # {x86/arm: {region: (ami-id, ami-info), ...}}
 az_map_dict = pickle.load(open('./data/az_map_dict.pkl', 'rb')) # {(region, az-id): az-name, ...}
 arm64_family = ['a1', 't4g', 'c6g', 'c6gd', 'c6gn', 'im4gn', 'is4gen', 'm6g', 'm6gd', 'r6g', 'r6gd', 'x2gd']
-
+LOG_BUCKET_NAME = 'spot-checker-data'
 
 ### Spot Checker Arguments
 parser = argparse.ArgumentParser(description='Spot Checker Workload Information')
@@ -19,8 +19,8 @@ parser.add_argument('--instance_type', type=str, default='t2.large')
 parser.add_argument('--region', type=str, default='ap-southeast-2')
 parser.add_argument('--az_id', type=str, default='apse2-az2')
 parser.add_argument('--wait_minutes', type=int, default='1', help='wait before request, minutes')
-parser.add_argument('--time_minutes', type=int, default='0', help='how long check spot instance, minutes')
-parser.add_argument('--time_hours', type=int, default='24', help='how long check spot instance, hours')
+parser.add_argument('--time_minutes', type=int, default='5', help='how long check spot instance, minutes')
+parser.add_argument('--time_hours', type=int, default='0', help='how long check spot instance, hours')
 args = parser.parse_args()
 
 
@@ -172,5 +172,4 @@ pickle.dump(spot_data_dict, open(filename, 'wb'))
 
 # Upload log to S3
 spot_data_dict_obj = pickle.dumps(spot_data_dict)
-BUCKET_NAME = 'spot-checker-data'
-s3.Object(BUCKET_NAME, filename).put(Body=spot_data_dict_obj)
+s3.Object(LOG_BUCKET_NAME, filename).put(Body=spot_data_dict_obj)
