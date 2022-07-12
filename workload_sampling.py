@@ -8,79 +8,119 @@ from io import StringIO
 
 # boto3 setting
 session = boto3.session.Session(profile_name='default')
-s3_client = session.client('s3')
-s3_resource = session.resource('s3')
+start_date = "2022-07-11"
+end_date = "2022-07-11"
 
-BUCKET_SPS = 'sps-data'
-BUCKET_SPOTINFO = 'spotinfo-data'
+timestream_data = {"SpotPrice" : [], "Savings" : [], "SPS" : [], "AZ" : [], "Region" : [], "InstanceType" : [], "IF" : [], "time" : []}
 
-# get most recent sps, spotinfo data
-top_n = 5
+def run_query(query_string):
+    try:
+        session = boto3.Session()
+        query_client = session.client('timestream-query')
+        paginator = query_client.get_paginator('query')
+        page_iterator = paginator.paginate(QueryString=query_string)
+        for page in page_iterator:
+            _parse_query_result(page)
+    except Exception as err:
+        print("Exception while running query:", err)
 
-pagenator = s3_client.get_paginator('list_objects').paginate(Bucket=BUCKET_SPS, Prefix='data/')
-pages = [page for page in pagenator]
-contents = [content['Contents'] for content in pages]
-flat_contents = [content for sublist in contents for content in sublist]
-sps_objects = [(x['Key'], x['LastModified']) for x in flat_contents if 'pkl' in x['Key']]
+def _parse_query_result(query_result):
+    query_status = query_result["QueryStatus"]
 
-sps_list = []
-for sps_filename, sps_datetime in tqdm(sps_objects[-top_n:]):
-    sps_queries = pickle.loads(s3_resource.Bucket(BUCKET_SPS).Object(sps_filename).get()['Body'].read())
-    for query in sps_queries:
-        instance_type = query[1]
-        scores = query[3]
-        for score in scores:
-            sps_list.append([instance_type, score['Region'], score['AvailabilityZoneId'], score['Score'], sps_datetime])
-            
-sps_df = pd.DataFrame(sps_list, columns=['InstanceType', 'Region', 'AvailabilityZoneId', 'Score', 'TimeStamp'])
-sps_df = sps_df.sort_values(by=['TimeStamp', 'InstanceType', 'Region', 'AvailabilityZoneId'], ignore_index=True)
+    column_info = query_result['ColumnInfo']
+    for row in query_result['Rows']:
+        _parse_row(column_info, row)
 
-pickle.dump(sps_df, open('./sps_df.pkl', 'wb'))
+def _parse_row(column_info, row):
+    data = row['Data']
+    row_output = []
+    for j in range(len(data)):
+        info = column_info[j]
+        datum = data[j]
+        row_output.append(_parse_datum(info, datum))
 
-session = boto3.session.Session(profile_name='default')
-s3_client = session.client('s3')
-s3_resource = session.resource('s3')
+    return "{%s}" % str(row_output)
 
+def _parse_datum(info, datum):
+    if datum.get('NullValue', False):
+        return "%s=NULL" % info['Name'],
 
-pagenator = s3_client.get_paginator('list_objects').paginate(Bucket=BUCKET_SPOTINFO)
-pages = [page for page in pagenator]
-contents = [content['Contents'] for content in pages]
-flat_contents = [content for sublist in contents for content in sublist]
-spotinfo_objects = [(x['Key'], x['LastModified']) for x in flat_contents if 'txt' in x['Key']]
+    column_type = info['Type']
 
-spotinfo_df_list = []
-for spotinfo_filename, spotinfo_datetime in tqdm(spotinfo_objects[-top_n:]):
-    spotinfo_object = s3_resource.Object(bucket_name=BUCKET_SPOTINFO, key=spotinfo_filename)
-    spotinfo_response = spotinfo_object.get()
-    
-    spotinfo_df = pd.read_csv(StringIO(spotinfo_response['Body'].read().decode('utf-8')), skiprows=1)
-    spotinfo_df = spotinfo_df[['Region', 'Instance Info', 'Frequency of interruption', 'USD/Hour']]
-    spotinfo_df = spotinfo_df.rename(columns={'Instance Info': 'InstanceType',
-                                              'Frequency of interruption': 'Frequency',
-                                              'USD/Hour': 'Price'})
-    spotinfo_df = spotinfo_df[['InstanceType', 'Region', 'Frequency', 'Price']]
-    spotinfo_df['TimeStamp'] = spotinfo_datetime
-    spotinfo_df = spotinfo_df.sort_values(by=['InstanceType', 'Region'], ignore_index=True)
-    spotinfo_df_list.append(spotinfo_df)
-    
-spotinfo_df = pd.concat(spotinfo_df_list)
-pickle.dump(spotinfo_df, open('./spotinfo_df.pkl', 'wb'))
+    # If the column is of TimeSeries Type
+    if 'TimeSeriesMeasureValueColumnInfo' in column_type:
+        return _parse_time_series(info, datum)
 
-# load and filter dataset
-sps = pickle.load(open('./sps_df.pkl', 'rb'))
-spotinfo = pickle.load(open('./spotinfo_df.pkl', 'rb'))
+    # If the column is of Array Type
+    elif 'ArrayColumnInfo' in column_type:
+        array_values = datum['ArrayValue']
+        return "%s=%s" % (info['Name'], _parse_array(info['Type']['ArrayColumnInfo'], array_values))
 
-spotinfo = spotinfo[spotinfo['TimeStamp'] == spotinfo['TimeStamp'].iloc[-1]]
-sps = sps[sps['TimeStamp'] == sps['TimeStamp'].iloc[-1]]
+    # If the column is of Row Type
+    elif 'RowColumnInfo' in column_type:
+        row_column_info = info['Type']['RowColumnInfo']
+        row_values = datum['RowValue']
+        return _parse_row(row_column_info, row_values)
+
+    # If the column is of Scalar Type
+    else:
+        global timestream_data
+        if info['Name'] == "time":
+            timestream_data[info['Name']].append(datum['ScalarValue'].split('.')[0]+"+00:00")
+        elif info['Name'] != "measure_name" and info['Name'] != "measure_value::double":
+            timestream_data[info['Name']].append(datum['ScalarValue'])
+        return _parse_column_name(info) + datum['ScalarValue']
+
+def _parse_time_series(info, datum):
+    time_series_output = []
+    for data_point in datum['TimeSeriesValue']:
+        time_series_output.append("{time=%s, value=%s}"
+                                    % (data_point['Time'],
+                                        _parse_datum(info['Type']['TimeSeriesMeasureValueColumnInfo'],
+                                                        data_point['Value'])))
+    return "[%s]" % str(time_series_output)
+
+def _parse_array(array_column_info, array_values):
+    array_output = []
+    for datum in array_values:
+        array_output.append(_parse_datum(array_column_info, datum))
+
+    return "[%s]" % str(array_output)
+
+def run_query_with_multiple_pages(limit):
+    query_with_limit = SELECT_ALL + " LIMIT " + str(limit)
+    print("Starting query with multiple pages : " + query_with_limit)
+    run_query(query_with_limit)
+
+def cancel_query():
+    print("Starting query: " + SELECT_ALL)
+    result = client.query(QueryString=SELECT_ALL)
+    print("Cancelling query: " + SELECT_ALL)
+    try:
+        client.cancel_query(QueryId=result['QueryId'])
+        print("Query has been successfully cancelled")
+    except Exception as err:
+        print("Cancelling query failed:", err)
+
+def _parse_column_name(info):
+    if 'Name' in info:
+        return info['Name'] + "="
+    else:
+        return ""
+
+def get_timestream(start_date, end_date):
+    print(f"Start query ({start_date}~{end_date})")
+    query_string = f"""SELECT * FROM "spotrank-timestream"."spot-table" WHERE time between from_iso8601_date('{start_date}') and from_iso8601_date('{end_date}') ORDER BY time"""
+    run_query(query_string)
+    print(start_date + "~" + end_date + " is end")
+    timestream_df = pd.DataFrame(timestream_data)
+    timestream_df.drop_duplicates(inplace=True)
+    return timestream_df
+
+join_df = get_timestream(start_date, end_date)
 
 frequency_map = {'<5%': 5, '5-10%': 4, '10-15%': 3, '15-20%': 2, '>20%': 1}
-spotinfo = spotinfo.replace({'Frequency': frequency_map})
-
-# join sps and spotinfo
-join_df = sps.merge(spotinfo,
-                    how='inner',
-                    on = ['InstanceType', 'Region'],
-                    suffixes=('_sps', '_spotinfo'))
+join_df = join_df.replace({'Frequency': frequency_map})
 
 instance_types = join_df['InstanceType']
 instance_classes = instance_types.str.extract('([a-zA-Z]+)', expand=True)
@@ -93,7 +133,7 @@ cheap_workload = join_df[join_df['Price'] <= 1]
 expensive_workload = join_df[join_df['Price'] > 1]
 
 cheap_workload_min = cheap_workload.groupby(by=['InstanceFamily', 'Region']).min()
-msk = np.random.rand(len(cheap_workload_min)) < 0.5
+msk = np.random.rand(len(cheap_workload_min)) < 0.3
 cheap_workload_min_1 = cheap_workload_min[msk]
 cheap_workload_min_2 = cheap_workload_min[~msk]
 
