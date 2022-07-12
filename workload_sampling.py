@@ -7,15 +7,16 @@ from tqdm import tqdm
 from io import StringIO
 
 # boto3 setting
-session = boto3.session.Session(profile_name='default')
 start_date = "2022-07-11"
-end_date = "2022-07-11"
+end_date = "2022-07-12"
+profile_name = "default"
+region_name = "us-west-2"
 
 timestream_data = {"SpotPrice" : [], "Savings" : [], "SPS" : [], "AZ" : [], "Region" : [], "InstanceType" : [], "IF" : [], "time" : []}
 
 def run_query(query_string):
     try:
-        session = boto3.Session()
+        session = boto3.Session(profile_name=profile_name, region_name=region_name)
         query_client = session.client('timestream-query')
         paginator = query_client.get_paginator('query')
         page_iterator = paginator.paginate(QueryString=query_string)
@@ -118,19 +119,20 @@ def get_timestream(start_date, end_date):
     return timestream_df
 
 join_df = get_timestream(start_date, end_date)
+join_df = join_df[join_df['time'] == max(join_df['time'].unique())]
 
 frequency_map = {'<5%': 5, '5-10%': 4, '10-15%': 3, '15-20%': 2, '>20%': 1}
-join_df = join_df.replace({'Frequency': frequency_map})
-
+join_df = join_df.replace({'IF': frequency_map})
 instance_types = join_df['InstanceType']
 instance_classes = instance_types.str.extract('([a-zA-Z]+)', expand=True)
 instance_families = instance_types.str.extract('([a-zA-Z0-9]+).', expand=True)
 join_df['InstanceClass'] = instance_classes
 join_df['InstanceFamily'] = instance_families
-join_df = join_df[['InstanceClass', 'InstanceFamily', 'InstanceType', 'Region', 'AvailabilityZoneId', 'Score', 'Frequency', 'Price']]
+join_df['SpotPrice'] = join_df['SpotPrice'].astype(float)
+join_df = join_df[['InstanceClass', 'InstanceFamily', 'InstanceType', 'Region', 'AZ', 'SPS', 'IF', 'SpotPrice']]
 
-cheap_workload = join_df[join_df['Price'] <= 1]
-expensive_workload = join_df[join_df['Price'] > 1]
+cheap_workload = join_df[join_df['SpotPrice'] <= 1]
+expensive_workload = join_df[join_df['SpotPrice'] > 1]
 
 cheap_workload_min = cheap_workload.groupby(by=['InstanceFamily', 'Region']).min()
 msk = np.random.rand(len(cheap_workload_min)) < 0.3
@@ -139,12 +141,12 @@ cheap_workload_min_2 = cheap_workload_min[~msk]
 
 workload_list_1 = []
 for idx, row in cheap_workload_min_1.iterrows():
-    workload_info = f"{row['InstanceType']} {idx[1]} {row['AvailabilityZoneId']}"
+    workload_info = f"{row['InstanceType']} {idx[1]} {row['AZ']}"
     workload_list_1.append(workload_info)
 
 workload_list_2 = []
 for idx, row in cheap_workload_min_2.iterrows():
-    workload_info = f"{row['InstanceType']} {idx[1]} {row['AvailabilityZoneId']}"
+    workload_info = f"{row['InstanceType']} {idx[1]} {row['AZ']}"
     workload_list_2.append(workload_info)
     
 with open(f'./data/workloads_{len(cheap_workload_min_1)}_1.txt', 'w') as file:
