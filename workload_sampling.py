@@ -134,7 +134,7 @@ join_df = join_df[['InstanceClass', 'InstanceFamily', 'InstanceType', 'Region', 
 cheap_workload = join_df[join_df['SpotPrice'] <= 1]
 expensive_workload = join_df[join_df['SpotPrice'] > 1]
 
-cheap_workload_min = cheap_workload.groupby(by=['InstanceFamily', 'Region']).min()
+cheap_workload_min = cheap_workload.sort_values(by=['SpotPrice']).groupby(by=['InstanceFamily', 'Region']).first()
 msk = np.random.rand(len(cheap_workload_min)) < 0.3
 cheap_workload_min_1 = cheap_workload_min[msk]
 cheap_workload_min_2 = cheap_workload_min[~msk]
