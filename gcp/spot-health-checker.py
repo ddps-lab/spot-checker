@@ -12,6 +12,7 @@ import json
 from pathlib import Path
 
 PRINT_LOG = True
+SAVE_LOG_INTERVAL_SEC = 60 * 60
 
 IMAGE_PROJECT_NAME = "ubuntu-os-cloud"
 IMAGE_NAME = "ubuntu-2204-lts"
@@ -182,6 +183,49 @@ def delete_instance(project: str, zone: str, name: str) -> None:
     wait_for_operation(operation)
 
 
+def save_log(instance_type: str, instance_zone: str, instance_name: str, launch_time: datetime, created_time: datetime, logs: List[Any], path: str = "./logs") -> None:
+    """
+    Save log
+
+    :param instance_type: Instance type of log to save
+    :param instance_zone: Instance zone of log to save
+    :param instance_name: Instance name of log to save
+    :param launch_time: Start time of health checker
+    :param created_time: Creation time of instance
+    :param logs: Log array to save
+    :param path: Log path to save logs (default: "./logs")
+    """
+    try:
+        print_log(instance_type, instance_zone,
+                  instance_name, "Saving logs...")
+        Path(path).mkdir(exist_ok=True)
+        file_path = os.path.join(
+            path, f"{instance_type}_{instance_zone}_{launch_time}.json")
+        try:
+            if os.path.exists(file_path):
+                if os.path.exists(file_path + ".bak"):
+                    os.remove(file_path + ".bak")
+                os.rename(file_path, file_path + ".bak")
+        except:
+            pass
+        with open(file_path, "w") as f:
+            f.write(
+                json.dumps({
+                    "launch_time": launch_time,
+                    "created_time": created_time,
+                    "instance_type": instance_type,
+                    "instance_zone": instance_zone,
+                    "logs": logs
+                }, indent=4, sort_keys=True, default=str)
+            )
+        print_log(instance_type, instance_zone,
+                  instance_name, "Save log successful")
+    except Exception as e:
+        print_error(instance_type, instance_zone,
+                    instance_name, "Save log failed")
+        print(e)
+
+
 parser = argparse.ArgumentParser(description="Spot Checker For GCP")
 parser.add_argument("--instance_name", type=str,
                     default="instance-" + str(uuid4()).replace("-", ""))
@@ -217,12 +261,17 @@ print_log(instance_type, instance_zone, instance_name, "Create successful")
 stop_time = datetime.utcnow() + timedelta(hours=hours, minutes=minutes)
 status_old = None
 logs = []
+next_log_time = datetime.utcnow() + timedelta(seconds=SAVE_LOG_INTERVAL_SEC)
 
 try:
     while True:
         if datetime.utcnow() > stop_time:
             print_log(instance_type, instance_zone, instance_name, "Done")
             break
+        if datetime.utcnow() >= next_log_time:
+            save_log(instance_type, instance_zone, instance_name,
+                     launch_time, created_time, logs)
+            next_log_time += timedelta(seconds=SAVE_LOG_INTERVAL_SEC)
         try:
             spot_instance = get_instance(
                 PROJECT_NAME, instance_zone, instance_name)
@@ -263,24 +312,8 @@ except KeyboardInterrupt:
     print_error(instance_type, instance_zone, instance_name,
                 "KeyboardInterrupt raised. Shutting down gracefully...")
 
-try:
-    print_log(instance_type, instance_zone, instance_name, "Saving logs...")
-    Path("./logs").mkdir(exist_ok=True)
-    with open(f"./logs/{instance_type}_{instance_zone}_{launch_time}.json", "w") as f:
-        f.write(
-            json.dumps({
-                "launch_time": launch_time,
-                "created_time": created_time,
-                "instance_type": instance_type,
-                "instance_zone": instance_zone,
-                "logs": logs
-            }, indent=4, sort_keys=True, default=str)
-        )
-    print_log(instance_type, instance_zone,
-              instance_name, "Save log successful")
-except Exception as e:
-    print_error(instance_type, instance_zone, instance_name, "Save log failed")
-    print(e)
+save_log(instance_type, instance_zone, instance_name,
+         launch_time, created_time, logs)
 
 try:
     print_log(instance_type, instance_zone,
