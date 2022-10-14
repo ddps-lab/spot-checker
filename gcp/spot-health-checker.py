@@ -1,3 +1,5 @@
+from datetime import datetime
+from typing import Any, Dict, List
 import argparse
 from typing import Any, List
 # import google.cloud.compute_v1 as compute
@@ -22,33 +24,84 @@ with open(os.environ["GOOGLE_APPLICATION_CREDENTIALS"], "r", encoding="utf-8") a
     PROJECT_NAME = json.loads(f.read())["project_id"]
 
 
-def print_log(instance_type: str, instance_zone: str, instance_name: str, message: str) -> None:
-    """
-    Print log message when PRINT_LOG is True
+class Logger:
+    def __init__(self, instance_type: str, instance_zone: str, instance_name: str, launch_time: datetime, path: str = "./logs"):
+        """
+        Logger
 
-    :param instance_type: Instance type to print with message
-    :param instance_zone: Instance zone to print with message
-    :param instance_name: Instance name to print with message
-    :param message: message to print
-    """
-    try:
-        if not PRINT_LOG:
-            return
-    except:
-        pass
-    print(f"[!] {instance_type}/{instance_zone}/{instance_name}: {message}")
+        :param instance_type: Instance type of log to save
+        :param instance_zone: Instance zone of log to save
+        :param instance_name: Instance name of log to save
+        :param launch_time: Start time of health checker
+        :param created_time: Creation time of instance
+        :param path: Path to save logs (default: "./logs")
+        """
+        self.logs: List[Dict] = []
+        self.keys: List[str] = []
+        Path(path).mkdir(exist_ok=True)
+        self.file_path = os.path.join(
+            path, f"{instance_type}_{instance_zone}_{launch_time}.csv")
+        self.instance_type = instance_type
+        self.instance_zone = instance_zone
+        self.instance_name = instance_name
 
+        self.logging = True
 
-def print_error(instance_type: str, instance_zone: str, instance_name: str, message: str) -> None:
-    """
-    Print error message
+    def set_logging(self, logging: bool) -> None:
+        self.logging = logging
 
-    :param instance_type: Instance type to print with message
-    :param instance_zone: Instance zone to print with message
-    :param instance_name: Instance name to print with message
-    :param message: message to print
-    """
-    print(f"[-] {instance_type}/{instance_zone}/{instance_name}: {message}")
+    def print_log(self, message: str) -> None:
+        """
+        Print log message when logging is enabled.
+
+        :param message: message to print
+        """
+        if self.logging:
+            print(
+                f"[!] {self.instance_type}/{self.instance_zone}/{self.instance_name}: {message}")
+
+    def print_error(self, message: str) -> None:
+        """
+        Print error message
+
+        :param message: message to print
+        """
+        print(
+            f"[-] {self.instance_type}/{self.instance_zone}/{self.instance_name}: {message}")
+
+    def append(self, val: Any) -> None:
+        """
+        Append log
+
+        :param val: Value to append
+        """
+        self.logs.append(val)
+
+    def save_log(self) -> None:
+        self.print_log("Saving logs...")
+        try:
+            if not self.logs:
+                return
+            if not self.keys:  # init log dict keys and csv file
+                self.keys = list(self.logs[0].keys())
+                with open(self.file_path, "w", encoding="utf-8") as f:
+                    f.write(",".join(self.keys))
+
+            content = []
+            for i in self.logs:
+                tmp = []
+                for j in self.keys:
+                    tmp.append(str(i[j]))
+                content.append(",".join(tmp))
+
+            with open(self.file_path, "a", encoding="utf-8") as f:
+                f.write("\n" + "\n".join(content))
+
+            self.logs = []
+            self.print_log("Save log successful")
+        except Exception as e:
+            self.print_error("Save log failed")
+            print(e)
 
 
 def get_image(project: str, family: str, arch: str) -> str:
@@ -183,49 +236,6 @@ def delete_instance(project: str, zone: str, name: str) -> None:
     wait_for_operation(operation)
 
 
-def save_log(instance_type: str, instance_zone: str, instance_name: str, launch_time: datetime, created_time: datetime, logs: List[Any], path: str = "./logs") -> None:
-    """
-    Save log
-
-    :param instance_type: Instance type of log to save
-    :param instance_zone: Instance zone of log to save
-    :param instance_name: Instance name of log to save
-    :param launch_time: Start time of health checker
-    :param created_time: Creation time of instance
-    :param logs: Log array to save
-    :param path: Log path to save logs (default: "./logs")
-    """
-    try:
-        print_log(instance_type, instance_zone,
-                  instance_name, "Saving logs...")
-        Path(path).mkdir(exist_ok=True)
-        file_path = os.path.join(
-            path, f"{instance_type}_{instance_zone}_{launch_time}.json")
-        try:
-            if os.path.exists(file_path):
-                if os.path.exists(file_path + ".bak"):
-                    os.remove(file_path + ".bak")
-                os.rename(file_path, file_path + ".bak")
-        except:
-            pass
-        with open(file_path, "w") as f:
-            f.write(
-                json.dumps({
-                    "launch_time": launch_time,
-                    "created_time": created_time,
-                    "instance_type": instance_type,
-                    "instance_zone": instance_zone,
-                    "logs": logs
-                }, indent=4, sort_keys=True, default=str)
-            )
-        print_log(instance_type, instance_zone,
-                  instance_name, "Save log successful")
-    except Exception as e:
-        print_error(instance_type, instance_zone,
-                    instance_name, "Save log failed")
-        print(e)
-
-
 parser = argparse.ArgumentParser(description="Spot Checker For GCP")
 parser.add_argument("--instance_name", type=str,
                     default="instance-" + str(uuid4()).replace("-", ""))
@@ -246,31 +256,32 @@ instance_arch = "arm" if instance_type.lower().startswith("t2a") else "x86"
 instance_zone = args.zone
 instance_region = "-".join(instance_zone.split("-")[:-1])
 
+logger = Logger(instance_type, instance_zone, instance_name, launch_time)
+
 hours = args.time_hours
 minutes = args.time_minutes
 
 print(f"""Instance Name: {instance_name}\nInstance Type: {instance_type}\nInstance DiskType: {instance_disk_type}\nInstance Arch: {instance_arch}\nInstance Region: {instance_region}\nInstance Zone: {instance_zone}""")
 
-print_log(instance_type, instance_zone, instance_name, "Creating instance...")
+logger.print_log("Creating instance...")
 create_spot_instance(PROJECT_NAME, instance_zone, instance_name, [get_disk(get_image(
     IMAGE_PROJECT_NAME, IMAGE_NAME, instance_arch), f"zones/{instance_zone}/diskTypes/{instance_disk_type}")], f"zones/{instance_zone}/machineTypes/{instance_type}")
 created_time = datetime.utcnow()
-print_log(instance_type, instance_zone, instance_name, "Create successful")
+logger.append({"time": created_time, "status": "CREATED"})
+logger.print_log("Create successful")
 
 
 stop_time = datetime.utcnow() + timedelta(hours=hours, minutes=minutes)
 status_old = None
-logs = []
 next_log_time = datetime.utcnow() + timedelta(seconds=SAVE_LOG_INTERVAL_SEC)
 
 try:
     while True:
         if datetime.utcnow() > stop_time:
-            print_log(instance_type, instance_zone, instance_name, "Done")
+            logger.print_log("Done")
             break
         if datetime.utcnow() >= next_log_time:
-            save_log(instance_type, instance_zone, instance_name,
-                     launch_time, created_time, logs)
+            logger.save_log()
             next_log_time += timedelta(seconds=SAVE_LOG_INTERVAL_SEC)
         try:
             spot_instance = get_instance(
@@ -281,44 +292,36 @@ try:
             # https://cloud.google.com/compute/docs/instances/instance-life-cycle
             status = spot_instance.status
 
-            logs.append({"time": now, "status": status})
+            logger.append({"time": now, "status": status})
 
             if status != status_old:
-                print_log(instance_type, instance_zone,
-                          instance_name, f"Status Changed - {status}")
+                logger.print_log(f"Status Changed - {status}")
                 status_old = status
 
             if status == "TERMINATED":
-                print_log(instance_type, instance_zone, instance_name,
-                          "Instance stopped. Restarting...")
+                logger.print_log("Instance stopped. Restarting...")
                 try:
                     start_instance(PROJECT_NAME, instance_zone, instance_name)
-                    print_log(instance_type, instance_zone,
-                              instance_name, "Restart successful")
+                    logger.print_log("Restart successful")
                 except KeyboardInterrupt:
                     raise
                 except Exception as e:
-                    print_error(instance_type, instance_zone,
-                                instance_name, "Restart failed")
+                    logger.print_error("Restart failed")
                     print(e)
         except KeyboardInterrupt:
             raise
         except Exception as e:
-            print_error(instance_type, instance_zone,
-                        instance_name, "Unknown Error")
+            logger.print_error("Unknown Error")
             print(e)
         time.sleep(5)
 except KeyboardInterrupt:
-    print_error(instance_type, instance_zone, instance_name,
-                "KeyboardInterrupt raised. Shutting down gracefully...")
+    logger.print_error("KeyboardInterrupt raised. Shutting down gracefully...")
 
-save_log(instance_type, instance_zone, instance_name,
-         launch_time, created_time, logs)
+logger.save_log()
 
 try:
-    print_log(instance_type, instance_zone,
-              instance_name, "Deleting instance...")
+    logger.print_log("Deleting instance...")
     delete_instance(PROJECT_NAME, instance_zone, instance_name)
-    print_log(instance_type, instance_zone, instance_name, "Delete successful")
+    logger.print_log("Delete successful")
 except:
-    print_error(instance_type, instance_zone, instance_name, "Delete failed")
+    logger.print_error("Delete failed")
