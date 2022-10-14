@@ -1,7 +1,5 @@
-from datetime import datetime
-from typing import Any, Dict, List
 import argparse
-from typing import Any, List
+from typing import Any, Dict, List
 from google.cloud import compute_v1 as compute
 from google.api_core.extended_operation import ExtendedOperation
 import os
