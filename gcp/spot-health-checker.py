@@ -274,26 +274,26 @@ logger.print_log("Create successful")
 
 stop_time = datetime.utcnow() + timedelta(hours=hours, minutes=minutes)
 status_old = None
-next_log_time = datetime.utcnow() + timedelta(seconds=SAVE_LOG_INTERVAL_SEC)
+next_log_time = datetime.utcnow() + timedelta(seconds=5)
+next_save_time = datetime.utcnow() + timedelta(seconds=SAVE_LOG_INTERVAL_SEC)
 
 try:
     while True:
         if datetime.utcnow() > stop_time:
             logger.print_log("Done")
             break
-        if datetime.utcnow() >= next_log_time:
+        if datetime.utcnow() >= next_save_time:
             logger.save_log()
-            next_log_time += timedelta(seconds=SAVE_LOG_INTERVAL_SEC)
+            next_save_time += timedelta(seconds=SAVE_LOG_INTERVAL_SEC)
         try:
             spot_instance = get_instance(
                 PROJECT_NAME, instance_zone, instance_name)
-            now = datetime.utcnow()
 
             # status can be PROVISIONING, STAGING, RUNNING, STOPPING, REPAIRING, TERMINATED, SUSPENDING, SUSPENDED
             # https://cloud.google.com/compute/docs/instances/instance-life-cycle
             status = spot_instance.status
 
-            logger.append({"time": now, "status": status})
+            logger.append({"time": datetime.utcnow(), "status": status})
 
             if status != status_old:
                 logger.print_log(f"Status Changed - {status}")
@@ -314,7 +314,13 @@ try:
         except Exception as e:
             logger.print_error("Unknown Error")
             print(e)
-        time.sleep(5)
+
+        if datetime.utcnow() >= next_log_time:
+            next_log_time = datetime.utcnow() + timedelta(seconds=5)
+        else:
+            time.sleep((next_log_time - datetime.utcnow()).total_seconds())
+            next_log_time += timedelta(seconds=5)
+
 except KeyboardInterrupt:
     logger.print_error("KeyboardInterrupt raised. Shutting down gracefully...")
 
