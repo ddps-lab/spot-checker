@@ -1,0 +1,10 @@
+europe-central2-a e2-micro
+us-west4-a e2-micro
+asia-east1-a n1-standard-1
+asia-southeast1-a n1-standard-1
+us-central1-a e2-micro
+us-east1-a e2-micro
+us-east4-a f1-micro
+us-west4-a f1-micro
+us-central1-a f1-micro
+us-east1-a f1-micro
