@@ -26,6 +26,4 @@ chmod +x ./google-cloud-sdk/install.sh
 ./google-cloud-sdk/install.sh
 
 # gcloud init
-# IAM 및 관리자 - 서비스 계정, 만든 후 키 다운로드
-# https://ikcoo.tistory.com/39
 # GOOGLE_APPLICATION_CREDENTIALS=KEY.json python3 spot-health-checker.py

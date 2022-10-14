@@ -2,7 +2,6 @@ from datetime import datetime
 from typing import Any, Dict, List
 import argparse
 from typing import Any, List
-# import google.cloud.compute_v1 as compute
 from google.cloud import compute_v1 as compute
 from google.api_core.extended_operation import ExtendedOperation
 import os
@@ -19,7 +18,6 @@ SAVE_LOG_INTERVAL_SEC = 60 * 60
 IMAGE_PROJECT_NAME = "ubuntu-os-cloud"
 IMAGE_NAME = "ubuntu-2204-lts"
 
-# PROJECT_NAME = "charged-mind-288907"
 with open(os.environ["GOOGLE_APPLICATION_CREDENTIALS"], "r", encoding="utf-8") as f:
     PROJECT_NAME = json.loads(f.read())["project_id"]
 
@@ -78,6 +76,9 @@ class Logger:
         self.logs.append(val)
 
     def save_log(self) -> None:
+        """
+        Save log
+        """
         self.print_log("Saving logs...")
         try:
             if not self.logs:
