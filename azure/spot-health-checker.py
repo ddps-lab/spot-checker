@@ -215,10 +215,11 @@ logger = Logger(instance_type, instance_zone, instance_name, launch_time)
 hours = args.time_hours
 minutes = args.time_minutes
 
-print(
-    f"""Instance Name: {instance_name}\nInstance Type: {instance_type}\nInstance Zone: {instance_zone}""")
-
 group_name = f"{instance_zone}_{instance_type}_{instance_name}"
+
+print(
+    f"""Instance Name: {instance_name}\nInstance Type: {instance_type}\nInstance Zone: {instance_zone}\nGroup Name: {group_name}""")
+
 create_group(group_name, instance_zone)
 
 logger.print_log("Creating instance...")
