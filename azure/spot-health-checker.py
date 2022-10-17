@@ -218,7 +218,7 @@ minutes = args.time_minutes
 print(
     f"""Instance Name: {instance_name}\nInstance Type: {instance_type}\nInstance Zone: {instance_zone}""")
 
-group_name = instance_name
+group_name = f"{instance_zone}_{instance_type}_{instance_name}"
 create_group(group_name, instance_zone)
 
 logger.print_log("Creating instance...")
