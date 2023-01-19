@@ -18,7 +18,7 @@ SLACK_URL = ""
 # print to slack webhook
 def print(msg):
     sys.stdout.write(f"{msg}\n")
-    requests.post(SLACK_URL, json={"text": msg})
+    requests.post(SLACK_URL, json={"text": f"{msg}"})
 
 
 PRINT_LOG = True
