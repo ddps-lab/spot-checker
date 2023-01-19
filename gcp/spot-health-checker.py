@@ -9,6 +9,17 @@ from datetime import datetime, timedelta
 import time
 import json
 from pathlib import Path
+import sys
+import requests
+
+SLACK_URL = ""
+
+
+# print to slack webhook
+def print(msg):
+    sys.stdout.write(f"{msg}\n")
+    requests.post(SLACK_URL, json={"text": msg})
+
 
 PRINT_LOG = True
 SAVE_LOG_INTERVAL_SEC = 60 * 60
@@ -263,8 +274,12 @@ minutes = args.time_minutes
 print(f"""Instance Name: {instance_name}\nInstance Type: {instance_type}\nInstance DiskType: {instance_disk_type}\nInstance Arch: {instance_arch}\nInstance Region: {instance_region}\nInstance Zone: {instance_zone}""")
 
 logger.print_log("Creating instance...")
-create_spot_instance(PROJECT_NAME, instance_zone, instance_name, [get_disk(get_image(
-    IMAGE_PROJECT_NAME, IMAGE_NAME, instance_arch), f"zones/{instance_zone}/diskTypes/{instance_disk_type}")], f"zones/{instance_zone}/machineTypes/{instance_type}")
+try:
+    create_spot_instance(PROJECT_NAME, instance_zone, instance_name, [get_disk(get_image(
+        IMAGE_PROJECT_NAME, IMAGE_NAME, instance_arch), f"zones/{instance_zone}/diskTypes/{instance_disk_type}")], f"zones/{instance_zone}/machineTypes/{instance_type}")
+except Exception as e:
+    print(f"{instance_name} {instance_type} {instance_region} {instance_zone} {e}")
+    raise
 created_time = datetime.utcnow()
 logger.append({"time": created_time, "status": "CREATED"})
 logger.print_log("Create successful")

@@ -9,6 +9,17 @@ from uuid import uuid4
 from datetime import datetime, timedelta
 import time
 from pathlib import Path
+import sys
+import requests
+
+SLACK_URL = ""
+
+
+# print to slack webhook
+def print(msg):
+    sys.stdout.write(f"{msg}\n")
+    requests.post(SLACK_URL, json={"text": msg})
+
 
 PRINT_LOG = True
 SAVE_LOG_INTERVAL_SEC = 60 * 60
@@ -220,7 +231,12 @@ group_name = f"{instance_zone}_{instance_type}_{instance_name}"
 print(
     f"""Instance Name: {instance_name}\nInstance Type: {instance_type}\nInstance Zone: {instance_zone}\nGroup Name: {group_name}""")
 
-create_group(group_name, instance_zone)
+try:
+    create_group(group_name, instance_zone)
+except Exception as e:
+    logger.print_error("Creating group failed")
+    print(e)
+    raise
 
 logger.print_log("Creating instance...")
 try:
