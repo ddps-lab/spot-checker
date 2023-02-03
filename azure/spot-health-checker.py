@@ -1,3 +1,4 @@
+from azure.storage.blob import BlobServiceClient, BlobClient, ContainerClient
 from azure.identity import AzureCliCredential
 from azure.mgmt.compute import ComputeManagementClient
 from azure.mgmt.resource import ResourceManagementClient
@@ -8,22 +9,14 @@ import os
 from uuid import uuid4
 from datetime import datetime, timedelta
 import time
-from pathlib import Path
 import sys
 import requests
 
-SLACK_URL = ""
-
-
-# print to slack webhook
-def print(msg):
-    sys.stdout.write(f"{msg}\n")
-    requests.post(SLACK_URL, json={"text": f"{msg}"})
-
+from pathlib import Path
 
 PRINT_LOG = True
-SAVE_LOG_INTERVAL_SEC = 60 * 60
-
+SAVE_LOG_INTERVAL_SEC = 300
+UPLOAD_LOG_INTERVAL_SEC = 1800
 credential = AzureCliCredential()
 subscription_id = os.environ["AZURE_SUBSCRIPTION_ID"]
 
@@ -31,6 +24,14 @@ resource_client = ResourceManagementClient(credential, subscription_id)
 network_client = NetworkManagementClient(credential, subscription_id)
 compute_client = ComputeManagementClient(credential, subscription_id)
 
+SLACK_URL = ""
+blob_container = ""
+
+
+# print to slack webhook
+def print(msg):
+    sys.stdout.write(f"{msg}\n")
+    requests.post(SLACK_URL, json={"text": f"{msg}"})
 
 class Logger:
     def __init__(self, instance_type: str, instance_zone: str, instance_name: str, launch_time: datetime, path: str = "./logs"):
@@ -44,11 +45,12 @@ class Logger:
         :param created_time: Creation time of instance
         :param path: Path to save logs (default: "./logs")
         """
+        self.connection_string = ""
         self.logs: List[Dict] = []
         self.keys: List[str] = []
         Path(path).mkdir(exist_ok=True)
-        self.file_path = os.path.join(
-            path, f"{instance_type}_{instance_zone}_{launch_time}.csv")
+        self.file_path = os.path.join(path, f"{instance_type}_{instance_zone}_{launch_time}.csv")
+        self.upload_path = f"{instance_type}_{instance_zone}_{launch_time}.csv"
         self.instance_type = instance_type
         self.instance_zone = instance_zone
         self.instance_name = instance_name
@@ -111,9 +113,21 @@ class Logger:
             self.logs = []
             self.print_log("Save log successful")
         except Exception as e:
-            self.print_error("Save log failed")
-            print(e)
+            self.print_error(f"Save log failed\n{e}")
 
+    def upload_log(self) -> None:
+        self.print_log("upload logs...")
+        try:
+            if not self.logs:
+                return
+
+            container_client = ContainerClient.from_connection_string(self.connection_string, f"{blob_container}")
+            with open(self.file_path, "rb") as data:
+                container_client.upload_blob(self.upload_path, data=data, overwrite=True)
+            self.print_log("upload log successful")
+        except Exception as e:
+            self.print_error("upload log failed")
+            print(e)
 
 def create_group(group_name: str, location: str):
     resource_client.resource_groups.create_or_update(
@@ -129,7 +143,7 @@ def get_status(group_name: str, name: str):
     vm_result = compute_client.virtual_machines.instance_view(group_name, name)
     if len(vm_result.statuses) < 2:
         return "Unknown"
-    return vm_result.statuses[1].display_status
+    return vm_result.statuses[1].display_status, vm_result.statuses[0].display_status
 
 
 def create_spot_instance(group_name: str, location: str, vm_size: str, name: str):
@@ -227,6 +241,7 @@ hours = args.time_hours
 minutes = args.time_minutes
 
 group_name = f"{instance_zone}_{instance_type}_{instance_name}"
+local_path = f"./logs/{instance_type}_{instance_zone}_{launch_time}.csv"
 
 print(
     f"""Instance Name: {instance_name}\nInstance Type: {instance_type}\nInstance Zone: {instance_zone}\nGroup Name: {group_name}""")
@@ -234,15 +249,15 @@ print(
 try:
     create_group(group_name, instance_zone)
 except Exception as e:
-    logger.print_error("Creating group failed")
-    print(e)
+    logger.print_error(f"Creating group failed\n{e}")
     raise
 
 logger.print_log("Creating instance...")
 try:
     create_spot_instance(group_name, instance_zone,
                          instance_type, instance_name)
-except:
+except Exception as e:
+    logger.print_error(e)
     logger.print_error("Creating instance failed")
     logger.print_log("Deleting group...")
     delete_group(group_name)
@@ -257,6 +272,7 @@ stop_time = datetime.utcnow() + timedelta(hours=hours, minutes=minutes)
 status_old = None
 next_log_time = datetime.utcnow() + timedelta(seconds=5)
 next_save_time = datetime.utcnow() + timedelta(seconds=SAVE_LOG_INTERVAL_SEC)
+next_upload_time = datetime.utcnow() + timedelta(seconds=UPLOAD_LOG_INTERVAL_SEC)
 
 try:
     while True:
@@ -266,10 +282,13 @@ try:
         if datetime.utcnow() >= next_save_time:
             logger.save_log()
             next_save_time += timedelta(seconds=SAVE_LOG_INTERVAL_SEC)
+        if datetime.utcnow() >= next_upload_time:
+            logger.upload_log()
+            next_upload_time += timedelta(seconds=UPLOAD_LOG_INTERVAL_SEC)
         try:
-            status = get_status(group_name, instance_name)
+            status, flag = get_status(group_name, instance_name)
 
-            logger.append({"time": datetime.utcnow(), "status": status})
+            logger.append({"time": datetime.utcnow(), "status": status+" "+flag})
 
             if status != status_old:
                 logger.print_log(f"Status Changed - {status}")
@@ -283,13 +302,11 @@ try:
                 except KeyboardInterrupt:
                     raise
                 except Exception as e:
-                    logger.print_error("Restart failed")
-                    print(e)
+                    logger.print_error(f"Restart failed\n{e}")
         except KeyboardInterrupt:
             raise
         except Exception as e:
-            logger.print_error("Unknown Error")
-            print(e)
+            logger.print_error(f"Unknown Error\n{e}")
 
         if datetime.utcnow() >= next_log_time:
             next_log_time = datetime.utcnow() + timedelta(seconds=5)
@@ -301,10 +318,11 @@ except KeyboardInterrupt:
     logger.print_error("KeyboardInterrupt raised. Shutting down gracefully...")
 
 logger.save_log()
+logger.upload_log()
 
 try:
     logger.print_log("Deleting instance...")
     delete_group(group_name)
     logger.print_log("Delete successful")
-except:
-    logger.print_error("Delete failed")
+except Exception as e:
+    logger.print_error(f"Delete failed\n{e}")
