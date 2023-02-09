@@ -4,6 +4,7 @@ from azure.mgmt.compute import ComputeManagementClient
 from azure.mgmt.resource import ResourceManagementClient
 from azure.mgmt.network import NetworkManagementClient
 import argparse
+from conf import config
 from typing import Any, Dict, List
 import os
 from uuid import uuid4
@@ -76,8 +77,7 @@ class Logger:
 
         :param message: message to print
         """
-        print(
-            f"[-] {self.instance_type}/{self.instance_zone}/{self.instance_name}: {message}")
+        print(f"[-] {self.instance_type}/{self.instance_zone}/{self.instance_name}: {message}")
 
     def append(self, val: Any) -> None:
         """
@@ -109,7 +109,6 @@ class Logger:
 
             with open(self.file_path, "a", encoding="utf-8") as f:
                 f.write("\n" + "\n".join(content))
-
             self.logs = []
             self.print_log("Save log successful")
         except Exception as e:
@@ -118,8 +117,6 @@ class Logger:
     def upload_log(self) -> None:
         self.print_log("upload logs...")
         try:
-            if not self.logs:
-                return
 
             container_client = ContainerClient.from_connection_string(self.connection_string, f"{blob_container}")
             with open(self.file_path, "rb") as data:
@@ -146,7 +143,7 @@ def get_status(group_name: str, name: str):
     return vm_result.statuses[1].display_status, vm_result.statuses[0].display_status
 
 
-def create_spot_instance(group_name: str, location: str, vm_size: str, name: str):
+def create_spot_instance(group_name: str, location: str, vm_size: str, name: str, image: str):
     poller = network_client.virtual_networks.begin_create_or_update(group_name, f"VNET-{name}", {
         "location": location,
         "address_space": {
@@ -190,7 +187,7 @@ def create_spot_instance(group_name: str, location: str, vm_size: str, name: str
             "image_reference": {
                 "publisher": "Canonical",
                 "offer": "UbuntuServer",
-                "sku": "18.04-LTS",
+                "sku": f"{image}",
                 "version": "latest"
             }
         },
@@ -213,6 +210,72 @@ def create_spot_instance(group_name: str, location: str, vm_size: str, name: str
 
     return vm_result
 
+def create_spot_instance_gen2(group_name: str, location: str, vm_size: str, name: str):
+    poller = network_client.virtual_networks.begin_create_or_update(group_name, f"VNET-{name}", {
+        "location": location,
+        "address_space": {
+            "address_prefixes": ["10.0.0.0/16"]
+        }
+    })
+    vnet_result = poller.result()
+
+    poller = network_client.subnets.begin_create_or_update(group_name, f"VNET-{name}", f"SUBNET-{name}", {
+        "address_prefix": "10.0.0.0/24"
+    })
+    subnet_result = poller.result()
+
+    poller = network_client.public_ip_addresses.begin_create_or_update(group_name, f"IP-{name}", {
+        "location": location,
+        "sku": {
+            "name": "Standard"
+        },
+        "public_ip_allocation_method": "Static",
+        "public_ip_address_version": "IPV4"
+    })
+    ip_address_result = poller.result()
+
+    poller = network_client.network_interfaces.begin_create_or_update(group_name, f"NIC-{name}", {
+        "location": location,
+        "ip_configurations": [{
+            "name": f"IPCONFIG-{name}",
+            "subnet": {
+                "id": subnet_result.id
+            },
+            "public_ip_address": {
+                "id": ip_address_result.id
+            }
+        }]
+    })
+    nic_result = poller.result()
+
+    poller = compute_client.virtual_machines.begin_create_or_update(group_name, name, {
+        "location": location,
+        "storage_profile": {
+            "image_reference": {
+                "publisher": "Canonical",
+                "offer": "UbuntuServer",
+                "sku": "18_04-lts-gen2",
+                "version": "latest"
+            }
+        },
+        "hardware_profile": {
+            "vm_size": vm_size  # "Standard_B1ls"
+        },
+        "os_profile": {
+            "computer_name": name,
+            "admin_username": "azureadmin",
+            "admin_password": uuid4()
+        },
+        "network_profile": {
+            "network_interfaces": [{
+                "id": nic_result.id
+            }]
+        },
+        "priority": "Spot"
+    })
+    vm_result = poller.result()
+
+    return vm_result
 
 def start_instance(group_name: str, name: str):
     poller = compute_client.virtual_machines.begin_start(group_name, name)
@@ -243,8 +306,7 @@ minutes = args.time_minutes
 group_name = f"{instance_zone}_{instance_type}_{instance_name}"
 local_path = f"./logs/{instance_type}_{instance_zone}_{launch_time}.csv"
 
-print(
-    f"""Instance Name: {instance_name}\nInstance Type: {instance_type}\nInstance Zone: {instance_zone}\nGroup Name: {group_name}""")
+print(f"""Instance Name: {instance_name}\nInstance Type: {instance_type}\nInstance Zone: {instance_zone}\nGroup Name: {group_name}""")
 
 try:
     create_group(group_name, instance_zone)
@@ -253,18 +315,27 @@ except Exception as e:
     raise
 
 logger.print_log("Creating instance...")
-try:
-    create_spot_instance(group_name, instance_zone,
-                         instance_type, instance_name)
-except Exception as e:
-    logger.print_error(e)
-    logger.print_error("Creating instance failed")
-    logger.print_log("Deleting group...")
-    delete_group(group_name)
-    raise
-
 created_time = datetime.utcnow()
-logger.append({"time": created_time, "status": "CREATED"})
+
+try:
+    if instance_type in config['arm64_vm']:
+        start_status = create_spot_instance(group_name, instance_zone,
+                             instance_type, instance_name, "18_04-lts-arm64")
+    elif instance_type in config['gen1_only_vm']:
+        start_status = create_spot_instance(group_name, instance_zone,
+                                            instance_type, instance_name, "18.04-LTS")
+    else:
+        start_status = create_spot_instance(group_name, instance_zone,
+                                            instance_type, instance_name, "18_04-lts-gen2")
+
+    logger.append({"time": created_time, "status": "CREATED"})
+except Exception as e:
+        logger.print_error(f"Creating instance failed\n{e}")
+        logger.print_log("Deleting group...")
+        delete_group(group_name)
+        raise
+start_time = datetime.utcnow()
+logger.append({"time": start_time, "status": "CREATED"})
 logger.print_log("Create successful")
 
 
