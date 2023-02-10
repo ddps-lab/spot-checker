@@ -20,6 +20,7 @@ SAVE_LOG_INTERVAL_SEC = 300
 UPLOAD_LOG_INTERVAL_SEC = 1800
 credential = AzureCliCredential()
 subscription_id = os.environ["AZURE_SUBSCRIPTION_ID"]
+nic_result = False
 
 resource_client = ResourceManagementClient(credential, subscription_id)
 network_client = NetworkManagementClient(credential, subscription_id)
@@ -150,42 +151,45 @@ def get_status(group_name: str, name: str):
 
 
 def create_spot_instance(group_name: str, location: str, vm_size: str, name: str, image: str):
-    poller = network_client.virtual_networks.begin_create_or_update(group_name, f"VNET-{name}", {
-        "location": location,
-        "address_space": {
-            "address_prefixes": ["10.0.0.0/16"]
-        }
-    })
-    vnet_result = poller.result()
+    global nic_result
 
-    poller = network_client.subnets.begin_create_or_update(group_name, f"VNET-{name}", f"SUBNET-{name}", {
-        "address_prefix": "10.0.0.0/24"
-    })
-    subnet_result = poller.result()
-
-    poller = network_client.public_ip_addresses.begin_create_or_update(group_name, f"IP-{name}", {
-        "location": location,
-        "sku": {
-            "name": "Standard"
-        },
-        "public_ip_allocation_method": "Static",
-        "public_ip_address_version": "IPV4"
-    })
-    ip_address_result = poller.result()
-
-    poller = network_client.network_interfaces.begin_create_or_update(group_name, f"NIC-{name}", {
-        "location": location,
-        "ip_configurations": [{
-            "name": f"IPCONFIG-{name}",
-            "subnet": {
-                "id": subnet_result.id
-            },
-            "public_ip_address": {
-                "id": ip_address_result.id
+    if not nic_result:
+        poller = network_client.virtual_networks.begin_create_or_update(group_name, f"VNET-{name}", {
+            "location": location,
+            "address_space": {
+                "address_prefixes": ["10.0.0.0/16"]
             }
-        }]
-    })
-    nic_result = poller.result()
+        })
+        vnet_result = poller.result()
+
+        poller = network_client.subnets.begin_create_or_update(group_name, f"VNET-{name}", f"SUBNET-{name}", {
+            "address_prefix": "10.0.0.0/24"
+        })
+        subnet_result = poller.result()
+
+        poller = network_client.public_ip_addresses.begin_create_or_update(group_name, f"IP-{name}", {
+            "location": location,
+            "sku": {
+                "name": "Standard"
+            },
+            "public_ip_allocation_method": "Static",
+            "public_ip_address_version": "IPV4"
+        })
+        ip_address_result = poller.result()
+
+        poller = network_client.network_interfaces.begin_create_or_update(group_name, f"NIC-{name}", {
+            "location": location,
+            "ip_configurations": [{
+                "name": f"IPCONFIG-{name}",
+                "subnet": {
+                    "id": subnet_result.id
+                },
+                "public_ip_address": {
+                    "id": ip_address_result.id
+                }
+            }]
+        })
+        nic_result = poller.result()
 
     poller = compute_client.virtual_machines.begin_create_or_update(group_name, name, {
         "location": location,
