@@ -25,14 +25,14 @@ resource_client = ResourceManagementClient(credential, subscription_id)
 network_client = NetworkManagementClient(credential, subscription_id)
 compute_client = ComputeManagementClient(credential, subscription_id)
 
-#SLACK_URL = ""
-#blob_container = ""
+SLACK_URL = ""
+blob_container = ""
 
 
 # print to slack webhook
-# def print(msg):
-#     sys.stdout.write(f"{msg}\n")
-#     requests.post(SLACK_URL, json={"text": f"{msg}"})
+def print(msg):
+    sys.stdout.write(f"{msg}\n")
+    requests.post(SLACK_URL, json={"text": f"{msg}"})
 
 class Logger:
     def __init__(self, instance_type: str, instance_zone: str, instance_name: str, launch_time: datetime, path: str = "./logs"):
@@ -114,17 +114,17 @@ class Logger:
         except Exception as e:
             self.print_error(f"Save log failed\n{e}")
 
-    # def upload_log(self) -> None:
-    #     self.print_log("upload logs...")
-    #     try:
-    #
-    #         container_client = ContainerClient.from_connection_string(self.connection_string, f"{blob_container}")
-    #         with open(self.file_path, "rb") as data:
-    #             container_client.upload_blob(self.upload_path, data=data, overwrite=True)
-    #         self.print_log("upload log successful")
-    #     except Exception as e:
-    #         self.print_error("upload log failed")
-    #         print(e)
+    def upload_log(self) -> None:
+        self.print_log("upload logs...")
+        try:
+
+            container_client = ContainerClient.from_connection_string(self.connection_string, f"{blob_container}")
+            with open(self.file_path, "rb") as data:
+                container_client.upload_blob(self.upload_path, data=data, overwrite=True)
+            self.print_log("upload log successful")
+        except Exception as e:
+            self.print_error("upload log failed")
+            print(e)
 
 def create_group(group_name: str, location: str):
     resource_client.resource_groups.create_or_update(
