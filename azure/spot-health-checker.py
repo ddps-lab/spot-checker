@@ -20,6 +20,7 @@ SAVE_LOG_INTERVAL_SEC = 300
 UPLOAD_LOG_INTERVAL_SEC = 1800
 credential = AzureCliCredential()
 subscription_id = os.environ["AZURE_SUBSCRIPTION_ID"]
+nic_result = False
 
 resource_client = ResourceManagementClient(credential, subscription_id)
 network_client = NetworkManagementClient(credential, subscription_id)
@@ -33,6 +34,7 @@ blob_container = ""
 def print(msg):
     sys.stdout.write(f"{msg}\n")
     requests.post(SLACK_URL, json={"text": f"{msg}"})
+
 
 class Logger:
     def __init__(self, instance_type: str, instance_zone: str, instance_name: str, launch_time: datetime, path: str = "./logs"):
@@ -50,7 +52,8 @@ class Logger:
         self.logs: List[Dict] = []
         self.keys: List[str] = []
         Path(path).mkdir(exist_ok=True)
-        self.file_path = os.path.join(path, f"{instance_type}_{instance_zone}_{launch_time}.csv")
+        self.file_path = os.path.join(
+            path, f"{instance_type}_{instance_zone}_{launch_time}.csv")
         self.upload_path = f"{instance_type}_{instance_zone}_{launch_time}.csv"
         self.instance_type = instance_type
         self.instance_zone = instance_zone
@@ -77,7 +80,8 @@ class Logger:
 
         :param message: message to print
         """
-        print(f"[-] {self.instance_type}/{self.instance_zone}/{self.instance_name}: {message}")
+        print(
+            f"[-] {self.instance_type}/{self.instance_zone}/{self.instance_name}: {message}")
 
     def append(self, val: Any) -> None:
         """
@@ -118,13 +122,16 @@ class Logger:
         self.print_log("upload logs...")
         try:
 
-            container_client = ContainerClient.from_connection_string(self.connection_string, f"{blob_container}")
+            container_client = ContainerClient.from_connection_string(
+                self.connection_string, f"{blob_container}")
             with open(self.file_path, "rb") as data:
-                container_client.upload_blob(self.upload_path, data=data, overwrite=True)
+                container_client.upload_blob(
+                    self.upload_path, data=data, overwrite=True)
             self.print_log("upload log successful")
         except Exception as e:
             self.print_error("upload log failed")
             print(e)
+
 
 def create_group(group_name: str, location: str):
     resource_client.resource_groups.create_or_update(
@@ -144,42 +151,45 @@ def get_status(group_name: str, name: str):
 
 
 def create_spot_instance(group_name: str, location: str, vm_size: str, name: str, image: str):
-    poller = network_client.virtual_networks.begin_create_or_update(group_name, f"VNET-{name}", {
-        "location": location,
-        "address_space": {
-            "address_prefixes": ["10.0.0.0/16"]
-        }
-    })
-    vnet_result = poller.result()
+    global nic_result
 
-    poller = network_client.subnets.begin_create_or_update(group_name, f"VNET-{name}", f"SUBNET-{name}", {
-        "address_prefix": "10.0.0.0/24"
-    })
-    subnet_result = poller.result()
-
-    poller = network_client.public_ip_addresses.begin_create_or_update(group_name, f"IP-{name}", {
-        "location": location,
-        "sku": {
-            "name": "Standard"
-        },
-        "public_ip_allocation_method": "Static",
-        "public_ip_address_version": "IPV4"
-    })
-    ip_address_result = poller.result()
-
-    poller = network_client.network_interfaces.begin_create_or_update(group_name, f"NIC-{name}", {
-        "location": location,
-        "ip_configurations": [{
-            "name": f"IPCONFIG-{name}",
-            "subnet": {
-                "id": subnet_result.id
-            },
-            "public_ip_address": {
-                "id": ip_address_result.id
+    if not nic_result:
+        poller = network_client.virtual_networks.begin_create_or_update(group_name, f"VNET-{name}", {
+            "location": location,
+            "address_space": {
+                "address_prefixes": ["10.0.0.0/16"]
             }
-        }]
-    })
-    nic_result = poller.result()
+        })
+        vnet_result = poller.result()
+
+        poller = network_client.subnets.begin_create_or_update(group_name, f"VNET-{name}", f"SUBNET-{name}", {
+            "address_prefix": "10.0.0.0/24"
+        })
+        subnet_result = poller.result()
+
+        poller = network_client.public_ip_addresses.begin_create_or_update(group_name, f"IP-{name}", {
+            "location": location,
+            "sku": {
+                "name": "Standard"
+            },
+            "public_ip_allocation_method": "Static",
+            "public_ip_address_version": "IPV4"
+        })
+        ip_address_result = poller.result()
+
+        poller = network_client.network_interfaces.begin_create_or_update(group_name, f"NIC-{name}", {
+            "location": location,
+            "ip_configurations": [{
+                "name": f"IPCONFIG-{name}",
+                "subnet": {
+                    "id": subnet_result.id
+                },
+                "public_ip_address": {
+                    "id": ip_address_result.id
+                }
+            }]
+        })
+        nic_result = poller.result()
 
     poller = compute_client.virtual_machines.begin_create_or_update(group_name, name, {
         "location": location,
@@ -210,6 +220,7 @@ def create_spot_instance(group_name: str, location: str, vm_size: str, name: str
 
     return vm_result
 
+
 def start_instance(group_name: str, name: str):
     poller = compute_client.virtual_machines.begin_start(group_name, name)
     poller.result()
@@ -239,7 +250,8 @@ minutes = args.time_minutes
 group_name = f"{instance_zone}_{instance_type}_{instance_name}"
 local_path = f"./logs/{instance_type}_{instance_zone}_{launch_time}.csv"
 
-print(f"""Instance Name: {instance_name}\nInstance Type: {instance_type}\nInstance Zone: {instance_zone}\nGroup Name: {group_name}""")
+print(
+    f"""Instance Name: {instance_name}\nInstance Type: {instance_type}\nInstance Zone: {instance_zone}\nGroup Name: {group_name}""")
 
 try:
     create_group(group_name, instance_zone)
@@ -250,23 +262,28 @@ except Exception as e:
 logger.print_log("Creating instance...")
 created_time = datetime.utcnow()
 
-try:
-    if instance_type in config['arm64_vm']:
-        start_status = create_spot_instance(group_name, instance_zone,
-                             instance_type, instance_name, "18_04-lts-arm64")
-    elif instance_type in config['gen1_only_vm']:
-        start_status = create_spot_instance(group_name, instance_zone,
-                                            instance_type, instance_name, "18.04-LTS")
-    else:
-        start_status = create_spot_instance(group_name, instance_zone,
-                                            instance_type, instance_name, "18_04-lts-gen2")
+while True:
+    try:
+        if instance_type in config['arm64_vm']:
+            start_status = create_spot_instance(group_name, instance_zone,
+                                                instance_type, instance_name, "18_04-lts-arm64")
+        elif instance_type in config['gen1_only_vm']:
+            start_status = create_spot_instance(group_name, instance_zone,
+                                                instance_type, instance_name, "18.04-LTS")
+        else:
+            start_status = create_spot_instance(group_name, instance_zone,
+                                                instance_type, instance_name, "18_04-lts-gen2")
 
-    logger.append({"time": created_time, "status": "CREATED"})
-except Exception as e:
+        logger.append({"time": created_time, "status": "CREATED"})
+        break
+    except Exception as e:
         logger.print_error(f"Creating instance failed\n{e}")
-        logger.print_log("Deleting group...")
-        delete_group(group_name)
-        raise
+        if not "SkuNotAvailable" in str(e) or datetime.utcnow().timestamp() - launch_time.timestamp() > 1 * 60 * 60:
+            logger.print_log("Deleting group...")
+            delete_group(group_name)
+            raise
+        time.sleep(60)
+
 start_time = datetime.utcnow()
 logger.append({"time": start_time, "status": "CREATED"})
 logger.print_log("Create successful")
@@ -288,12 +305,13 @@ try:
             next_save_time += timedelta(seconds=SAVE_LOG_INTERVAL_SEC)
         if datetime.utcnow() >= next_upload_time:
             pass
-            #logger.upload_log()
+            # logger.upload_log()
             next_upload_time += timedelta(seconds=UPLOAD_LOG_INTERVAL_SEC)
         try:
             status, flag = get_status(group_name, instance_name)
 
-            logger.append({"time": datetime.utcnow(), "status": status+" "+flag})
+            logger.append({"time": datetime.utcnow(),
+                          "status": status+" "+flag})
 
             if status != status_old:
                 logger.print_log(f"Status Changed - {status}")
