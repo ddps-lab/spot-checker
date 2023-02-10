@@ -25,14 +25,14 @@ resource_client = ResourceManagementClient(credential, subscription_id)
 network_client = NetworkManagementClient(credential, subscription_id)
 compute_client = ComputeManagementClient(credential, subscription_id)
 
-SLACK_URL = ""
-blob_container = ""
+#SLACK_URL = ""
+#blob_container = ""
 
 
 # print to slack webhook
-def print(msg):
-    sys.stdout.write(f"{msg}\n")
-    requests.post(SLACK_URL, json={"text": f"{msg}"})
+# def print(msg):
+#     sys.stdout.write(f"{msg}\n")
+#     requests.post(SLACK_URL, json={"text": f"{msg}"})
 
 class Logger:
     def __init__(self, instance_type: str, instance_zone: str, instance_name: str, launch_time: datetime, path: str = "./logs"):
@@ -114,17 +114,17 @@ class Logger:
         except Exception as e:
             self.print_error(f"Save log failed\n{e}")
 
-    def upload_log(self) -> None:
-        self.print_log("upload logs...")
-        try:
-
-            container_client = ContainerClient.from_connection_string(self.connection_string, f"{blob_container}")
-            with open(self.file_path, "rb") as data:
-                container_client.upload_blob(self.upload_path, data=data, overwrite=True)
-            self.print_log("upload log successful")
-        except Exception as e:
-            self.print_error("upload log failed")
-            print(e)
+    # def upload_log(self) -> None:
+    #     self.print_log("upload logs...")
+    #     try:
+    #
+    #         container_client = ContainerClient.from_connection_string(self.connection_string, f"{blob_container}")
+    #         with open(self.file_path, "rb") as data:
+    #             container_client.upload_blob(self.upload_path, data=data, overwrite=True)
+    #         self.print_log("upload log successful")
+    #     except Exception as e:
+    #         self.print_error("upload log failed")
+    #         print(e)
 
 def create_group(group_name: str, location: str):
     resource_client.resource_groups.create_or_update(
@@ -188,73 +188,6 @@ def create_spot_instance(group_name: str, location: str, vm_size: str, name: str
                 "publisher": "Canonical",
                 "offer": "UbuntuServer",
                 "sku": f"{image}",
-                "version": "latest"
-            }
-        },
-        "hardware_profile": {
-            "vm_size": vm_size  # "Standard_B1ls"
-        },
-        "os_profile": {
-            "computer_name": name,
-            "admin_username": "azureadmin",
-            "admin_password": uuid4()
-        },
-        "network_profile": {
-            "network_interfaces": [{
-                "id": nic_result.id
-            }]
-        },
-        "priority": "Spot"
-    })
-    vm_result = poller.result()
-
-    return vm_result
-
-def create_spot_instance_gen2(group_name: str, location: str, vm_size: str, name: str):
-    poller = network_client.virtual_networks.begin_create_or_update(group_name, f"VNET-{name}", {
-        "location": location,
-        "address_space": {
-            "address_prefixes": ["10.0.0.0/16"]
-        }
-    })
-    vnet_result = poller.result()
-
-    poller = network_client.subnets.begin_create_or_update(group_name, f"VNET-{name}", f"SUBNET-{name}", {
-        "address_prefix": "10.0.0.0/24"
-    })
-    subnet_result = poller.result()
-
-    poller = network_client.public_ip_addresses.begin_create_or_update(group_name, f"IP-{name}", {
-        "location": location,
-        "sku": {
-            "name": "Standard"
-        },
-        "public_ip_allocation_method": "Static",
-        "public_ip_address_version": "IPV4"
-    })
-    ip_address_result = poller.result()
-
-    poller = network_client.network_interfaces.begin_create_or_update(group_name, f"NIC-{name}", {
-        "location": location,
-        "ip_configurations": [{
-            "name": f"IPCONFIG-{name}",
-            "subnet": {
-                "id": subnet_result.id
-            },
-            "public_ip_address": {
-                "id": ip_address_result.id
-            }
-        }]
-    })
-    nic_result = poller.result()
-
-    poller = compute_client.virtual_machines.begin_create_or_update(group_name, name, {
-        "location": location,
-        "storage_profile": {
-            "image_reference": {
-                "publisher": "Canonical",
-                "offer": "UbuntuServer",
-                "sku": "18_04-lts-gen2",
                 "version": "latest"
             }
         },
@@ -354,7 +287,8 @@ try:
             logger.save_log()
             next_save_time += timedelta(seconds=SAVE_LOG_INTERVAL_SEC)
         if datetime.utcnow() >= next_upload_time:
-            logger.upload_log()
+            pass
+            #logger.upload_log()
             next_upload_time += timedelta(seconds=UPLOAD_LOG_INTERVAL_SEC)
         try:
             status, flag = get_status(group_name, instance_name)
