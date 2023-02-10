@@ -279,8 +279,8 @@ while True:
         logger.append({"time": created_time, "status": "CREATED"})
         break
     except Exception as e:
+        logger.print_error(f"Creating instance failed\n{e}")
         if not "SkuNotAvailable" in str(e):
-            logger.print_error(f"Creating instance failed\n{e}")
             logger.print_log("Deleting group...")
             delete_group(group_name)
             raise
