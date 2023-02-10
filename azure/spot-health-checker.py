@@ -264,8 +264,6 @@ created_time = datetime.utcnow()
 
 while True:
     try:
-        if datetime.utcnow().timestamp() - launch_time.timestamp() > 1 * 60 * 60:
-            raise TimeoutError("Timeout - SkuNotAvailable")
         if instance_type in config['arm64_vm']:
             start_status = create_spot_instance(group_name, instance_zone,
                                                 instance_type, instance_name, "18_04-lts-arm64")
@@ -280,7 +278,7 @@ while True:
         break
     except Exception as e:
         logger.print_error(f"Creating instance failed\n{e}")
-        if not "SkuNotAvailable" in str(e):
+        if not "SkuNotAvailable" in str(e) or datetime.utcnow().timestamp() - launch_time.timestamp() > 1 * 60 * 60:
             logger.print_log("Deleting group...")
             delete_group(group_name)
             raise
