@@ -121,7 +121,6 @@ class Logger:
     def upload_log(self) -> None:
         self.print_log("upload logs...")
         try:
-
             container_client = ContainerClient.from_connection_string(
                 self.connection_string, f"{blob_container}")
             with open(self.file_path, "rb") as data:
@@ -262,6 +261,12 @@ except Exception as e:
 logger.print_log("Creating instance...")
 created_time = datetime.utcnow()
 
+stop_time = datetime.utcnow() + timedelta(hours=hours, minutes=minutes)
+status_old = None
+next_log_time = datetime.utcnow() + timedelta(seconds=3)
+next_save_time = datetime.utcnow() + timedelta(seconds=SAVE_LOG_INTERVAL_SEC)
+next_upload_time = datetime.utcnow() + timedelta(seconds=UPLOAD_LOG_INTERVAL_SEC)
+
 while True:
     try:
         if instance_type in config['arm64_vm']:
@@ -273,15 +278,19 @@ while True:
         else:
             start_status = create_spot_instance(group_name, instance_zone,
                                                 instance_type, instance_name, "18_04-lts-gen2")
-
-        logger.append({"time": created_time, "status": "CREATED"})
         break
     except Exception as e:
-        logger.print_error(f"Creating instance failed\n{e}")
-        if not "SkuNotAvailable" in str(e) or datetime.utcnow().timestamp() - launch_time.timestamp() > 1 * 60 * 60:
+        if not "SkuNotAvailable" in str(e) or datetime.utcnow().timestamp() - launch_time.timestamp() > 60 * 60 * 24:
+            logger.print_error(f"Creating instance failed\n{e}")
+            logger.append({"time": datetime.utcnow(), "status": f"Creating instance failed\n{e}"})
+            logger.save_log()
+            logger.upload_log()
             logger.print_log("Deleting group...")
             delete_group(group_name)
             raise
+        logger.print_error(f"SkuNotAvailable")
+        logger.append({"time": datetime.utcnow(), "status": "SkuNotAvailable"})
+        logger.save_log()
         time.sleep(60)
 
 start_time = datetime.utcnow()
@@ -289,11 +298,6 @@ logger.append({"time": start_time, "status": "CREATED"})
 logger.print_log("Create successful")
 
 
-stop_time = datetime.utcnow() + timedelta(hours=hours, minutes=minutes)
-status_old = None
-next_log_time = datetime.utcnow() + timedelta(seconds=5)
-next_save_time = datetime.utcnow() + timedelta(seconds=SAVE_LOG_INTERVAL_SEC)
-next_upload_time = datetime.utcnow() + timedelta(seconds=UPLOAD_LOG_INTERVAL_SEC)
 
 try:
     while True:
@@ -304,8 +308,7 @@ try:
             logger.save_log()
             next_save_time += timedelta(seconds=SAVE_LOG_INTERVAL_SEC)
         if datetime.utcnow() >= next_upload_time:
-            pass
-            # logger.upload_log()
+            logger.upload_log()
             next_upload_time += timedelta(seconds=UPLOAD_LOG_INTERVAL_SEC)
         try:
             status, flag = get_status(group_name, instance_name)
@@ -332,10 +335,10 @@ try:
             logger.print_error(f"Unknown Error\n{e}")
 
         if datetime.utcnow() >= next_log_time:
-            next_log_time = datetime.utcnow() + timedelta(seconds=5)
+            next_log_time = datetime.utcnow() + timedelta(seconds=3)
         else:
             time.sleep((next_log_time - datetime.utcnow()).total_seconds())
-            next_log_time += timedelta(seconds=5)
+            next_log_time += timedelta(seconds=3)
 
 except KeyboardInterrupt:
     logger.print_error("KeyboardInterrupt raised. Shutting down gracefully...")
