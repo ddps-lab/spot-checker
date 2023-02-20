@@ -2,6 +2,7 @@ import argparse
 from typing import Any, Dict, List
 from google.cloud import compute_v1 as compute
 from google.api_core.extended_operation import ExtendedOperation
+from google.cloud import storage
 import os
 import json
 from uuid import uuid4
@@ -13,6 +14,7 @@ import sys
 import requests
 
 SLACK_URL = ""
+bucket_name = "spot-checker"
 
 
 # print to slack webhook
@@ -22,8 +24,8 @@ def print(msg):
 
 
 PRINT_LOG = True
-SAVE_LOG_INTERVAL_SEC = 60 * 60
-
+SAVE_LOG_INTERVAL_SEC = 60
+UPLOAD_LOG_INTERVAL_SEC = 70
 IMAGE_PROJECT_NAME = "ubuntu-os-cloud"
 IMAGE_NAME = "ubuntu-2204-lts"
 
@@ -48,6 +50,7 @@ class Logger:
         Path(path).mkdir(exist_ok=True)
         self.file_path = os.path.join(
             path, f"{instance_type}_{instance_zone}_{launch_time}.csv")
+        self.upload_path = f"{instance_type}_{instance_zone}_{launch_time}.csv"
         self.instance_type = instance_type
         self.instance_zone = instance_zone
         self.instance_name = instance_name
@@ -111,6 +114,17 @@ class Logger:
             self.print_log("Save log successful")
         except Exception as e:
             self.print_error("Save log failed")
+            print(e)
+    def upload_log(self) -> None:
+        self.print_log("Upload logs...")
+        try:
+            storage_client = storage.Client()
+            bucket = storage_client.bucket(bucket_name)
+            blob = bucket.blob(self.upload_path)
+            blob.upload_from_filename(self.file_path)
+            self.print_log("Upload log successful")
+        except Exception as e:
+            self.print_error("Upload log failed")
             print(e)
 
 
@@ -287,8 +301,9 @@ logger.print_log("Create successful")
 
 stop_time = datetime.utcnow() + timedelta(hours=hours, minutes=minutes)
 status_old = None
-next_log_time = datetime.utcnow() + timedelta(seconds=5)
+next_log_time = datetime.utcnow() + timedelta(seconds=3)
 next_save_time = datetime.utcnow() + timedelta(seconds=SAVE_LOG_INTERVAL_SEC)
+next_upload_time = datetime.utcnow() + timedelta(seconds=UPLOAD_LOG_INTERVAL_SEC)
 
 try:
     while True:
@@ -298,6 +313,9 @@ try:
         if datetime.utcnow() >= next_save_time:
             logger.save_log()
             next_save_time += timedelta(seconds=SAVE_LOG_INTERVAL_SEC)
+        if datetime.utcnow() >= next_upload_time:
+            logger.upload_log()
+            next_upload_time += timedelta(seconds=UPLOAD_LOG_INTERVAL_SEC)
         try:
             spot_instance = get_instance(
                 PROJECT_NAME, instance_zone, instance_name)
@@ -329,10 +347,10 @@ try:
             print(e)
 
         if datetime.utcnow() >= next_log_time:
-            next_log_time = datetime.utcnow() + timedelta(seconds=5)
+            next_log_time = datetime.utcnow() + timedelta(seconds=3)
         else:
             time.sleep((next_log_time - datetime.utcnow()).total_seconds())
-            next_log_time += timedelta(seconds=5)
+            next_log_time += timedelta(seconds=3)
 
 except KeyboardInterrupt:
     logger.print_error("KeyboardInterrupt raised. Shutting down gracefully...")
