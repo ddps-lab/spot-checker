@@ -10,15 +10,9 @@ from pathlib import Path
 from slack_msg_sender import send_slack_message
 
 
-bucket_name = ''
-s3 = boto3.resource('s3', aws_access_key_id='', aws_secret_access_key='')
-session = boto3.session.Session()
-ec2 = session.client('ec2',  aws_access_key_id='', aws_secret_access_key='')
-launch_time = datetime.datetime.utcnow()
-
 # save log as csv. if file exists, overwrite
 def save_status_code(spot_data_list, instance_type, az_id):
-    filepath = f"logs/{instance_type}_{az_id}.csv"
+    filepath = f"./logs/{instance_type}_{az_id}.csv"
 
     if os.path.exists(filepath):
         df = pd.DataFrame(spot_data_list, columns=['InstanceType', 'AZ', 'status', 'time'])
@@ -28,15 +22,13 @@ def save_status_code(spot_data_list, instance_type, az_id):
     else:
         Path('./logs').mkdir(exist_ok=True)
         df = pd.DataFrame(spot_data_list, columns=['InstanceType', 'AZ', 'status', 'time'])
-        df.to_csv('/tmp/spot_data.csv', index=False)
+        df.to_csv(filepath, index=False)
 
     send_slack_message(instance_type, az_id, launch_time.strftime('%Y-%m-%D %H:%M:%S'), "로컬에 로그 저장 완료.")
 
 
-
-
 # create spot instance
-def create_spot_instance(instance_type, ami_id, az_name, az_id):
+def create_spot_instance(instance_type, ami_id, az_name, az_id, ec2):
     launch_spec = {
         'ImageId': ami_id,
         'InstanceType': instance_type,
@@ -50,13 +42,13 @@ def create_spot_instance(instance_type, ami_id, az_name, az_id):
     )
 
     request_id = create_request_response['SpotInstanceRequests'][0]['SpotInstanceRequestId']
+    spot_request = ec2.describe_spot_instance_requests(SpotInstanceRequestIds=[request_id])['SpotInstanceRequests'][0]
 
     spot_data_list = []
     wait_time = 0
     while True:
         time.sleep(5)
         wait_time += 5
-        spot_request = ec2.describe_spot_instance_requests(SpotInstanceRequestIds=[request_id])['SpotInstanceRequests'][0]
         code = spot_request['Status']['Code']
         spot_data_list.append([instance_type, az_id, code, datetime.datetime.utcnow()])
 
@@ -64,11 +56,10 @@ def create_spot_instance(instance_type, ami_id, az_name, az_id):
             send_slack_message(instance_type, az_id, launch_time.strftime('%Y-%m-%D %H:%M:%S'), f"{code} 됨")
             save_status_code(spot_data_list, instance_type, az_id)
             break
-        if wait_time > 60:
-            send_slack_message(instance_type, az_id, launch_time.strftime('%Y-%m-%D %H:%M:%S'), "60초를 기다렸으나 fulfill, interrupt되지 않음")
+
+        if wait_time > 86400:
             save_status_code(spot_data_list, instance_type, az_id)
             break
-
     if code == 'fulfilled':
         try:
             spot_instance_id = ec2.describe_spot_instance_requests(SpotInstanceRequestIds=[request_id])['SpotInstanceRequests'][0]['InstanceId']
@@ -81,10 +72,8 @@ def create_spot_instance(instance_type, ami_id, az_name, az_id):
     except Exception as e:
         send_slack_message(instance_type, az_id, launch_time.strftime('%Y-%m-%D %H:%M:%S'), f"!!!스팟 요청 삭제 실패!!! \n{e}")
 
-def spot_ding_dong_main(instance_type, ami_id, az_name, az_id, ding_dong_period):
+def spot_ding_dong_main(instance_type, ami_id, az_name, az_id, ec2, launch_time, ding_dong_period):
 
-
-    create_spot_instance(instance_type, ami_id, az_name, az_id)
     stop_time = datetime.datetime.now() + datetime.timedelta(hours=24)
     stop_time = stop_time.astimezone(pytz.UTC)
     next_ding_dong_time = launch_time.astimezone(pytz.UTC)
@@ -93,7 +82,7 @@ def spot_ding_dong_main(instance_type, ami_id, az_name, az_id, ding_dong_period)
         current_time = current_time.astimezone(pytz.UTC)
 
         if current_time > next_ding_dong_time:
-            create_spot_instance(instance_type, ami_id, az_name, az_id)
+            create_spot_instance(instance_type, ami_id, az_name, az_id, ec2)
             next_ding_dong_time = current_time + datetime.timedelta(minutes=ding_dong_period)
 
         if current_time > stop_time:
@@ -126,5 +115,11 @@ if __name__ == "__main__":
     az_name = az_map_dict[(region, az_id)]
     ami_id = region_ami[instance_arch][region][0]
 
+    session = boto3.session.Session()
+    ec2 = session.client('ec2', aws_access_key_id='',
+                         aws_secret_access_key='', region_name=f'{region}')
+
+    launch_time = datetime.datetime.utcnow()
+
     send_slack_message(instance_type, az_id, launch_time.strftime('%Y-%m-%D %H:%M:%S'), "시작")
-    spot_ding_dong_main(instance_type, ami_id, az_name, az_id, ding_dong_period)
+    spot_ding_dong_main(instance_type, ami_id, az_name, az_id, ec2, launch_time, ding_dong_period)
