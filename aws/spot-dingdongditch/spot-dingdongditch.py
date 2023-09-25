@@ -28,7 +28,7 @@ def save_status_code(spot_data_list, instance_type, az_id):
 
 
 # create spot instance
-def create_spot_instance(instance_type, ami_id, az_name, az_id, ec2):
+def create_spot_instance(instance_type, ami_id, az_name, az_id, stop_time, ec2):
     launch_spec = {
         'ImageId': ami_id,
         'InstanceType': instance_type,
@@ -42,24 +42,25 @@ def create_spot_instance(instance_type, ami_id, az_name, az_id, ec2):
     )
 
     request_id = create_request_response['SpotInstanceRequests'][0]['SpotInstanceRequestId']
-    spot_request = ec2.describe_spot_instance_requests(SpotInstanceRequestIds=[request_id])['SpotInstanceRequests'][0]
 
     spot_data_list = []
-    wait_time = 0
     while True:
         time.sleep(5)
-        wait_time += 5
+        current_time = datetime.datetime.now().astimezone(pytz.UTC)
+
+        spot_request = ec2.describe_spot_instance_requests(SpotInstanceRequestIds=[request_id])['SpotInstanceRequests'][0]
         code = spot_request['Status']['Code']
-        spot_data_list.append([instance_type, az_id, code, datetime.datetime.utcnow()])
+        spot_data_list.append([instance_type, az_id, code, current_time])
 
         if code == 'fulfilled' or code == 'capacity-not-available':
             send_slack_message(instance_type, az_id, launch_time.strftime('%Y-%m-%D %H:%M:%S'), f"{code} 됨")
             save_status_code(spot_data_list, instance_type, az_id)
             break
 
-        if wait_time > 86400:
+        if current_time > stop_time:
             save_status_code(spot_data_list, instance_type, az_id)
             break
+
     if code == 'fulfilled':
         try:
             spot_instance_id = ec2.describe_spot_instance_requests(SpotInstanceRequestIds=[request_id])['SpotInstanceRequests'][0]['InstanceId']
@@ -77,12 +78,13 @@ def spot_ding_dong_main(instance_type, ami_id, az_name, az_id, ec2, launch_time,
     stop_time = datetime.datetime.now() + datetime.timedelta(hours=24)
     stop_time = stop_time.astimezone(pytz.UTC)
     next_ding_dong_time = launch_time.astimezone(pytz.UTC)
+
     while True:
         current_time = datetime.datetime.now()
         current_time = current_time.astimezone(pytz.UTC)
 
         if current_time > next_ding_dong_time:
-            create_spot_instance(instance_type, ami_id, az_name, az_id, ec2)
+            create_spot_instance(instance_type, ami_id, az_name, az_id, stop_time, ec2)
             next_ding_dong_time = current_time + datetime.timedelta(minutes=ding_dong_period)
 
         if current_time > stop_time:
