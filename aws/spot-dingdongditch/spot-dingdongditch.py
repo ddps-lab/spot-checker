@@ -74,6 +74,7 @@ def create_spot_instance(instance_type, ami_id, az_name, az_id, stop_time, ec2):
     except Exception as e:
         send_slack_message(instance_type, az_id, launch_time.strftime('%Y-%m-%D %H:%M:%S'), f"!!!스팟 요청 삭제 실패!!! \n{e}")
 
+    return current_time
 def spot_ding_dong_ditch(instance_type, ami_id, az_name, az_id, ec2, launch_time, ding_dong_period):
     stop_time = datetime.datetime.now() + datetime.timedelta(hours=24)
     stop_time = stop_time.astimezone(pytz.UTC)
@@ -83,8 +84,8 @@ def spot_ding_dong_ditch(instance_type, ami_id, az_name, az_id, ec2, launch_time
         current_time = datetime.datetime.now().astimezone(pytz.UTC)
 
         if current_time > next_ding_dong_time:
-            create_spot_instance(instance_type, ami_id, az_name, az_id, stop_time, ec2)
-            next_ding_dong_time = current_time + datetime.timedelta(minutes=ding_dong_period)
+            instance_return_time = create_spot_instance(instance_type, ami_id, az_name, az_id, stop_time, ec2)
+            next_ding_dong_time = instance_return_time + datetime.timedelta(minutes=ding_dong_period)
 
         if current_time > stop_time:
             send_slack_message(instance_type, az_id, launch_time.strftime('%Y-%m-%D %H:%M:%S'), "실험 인스턴스 정지")
