@@ -38,7 +38,8 @@ def create_spot_instance(instance_type, ami_id, az_name, az_id, stop_time, ec2):
     create_request_response = ec2.request_spot_instances(
         InstanceCount=1,
         LaunchSpecification=launch_spec,
-        Type='one-time'
+        ValidUntil=stop_time,
+        Type='persistent'
     )
 
     request_id = create_request_response['SpotInstanceRequests'][0]['SpotInstanceRequestId']
@@ -73,15 +74,13 @@ def create_spot_instance(instance_type, ami_id, az_name, az_id, stop_time, ec2):
     except Exception as e:
         send_slack_message(instance_type, az_id, launch_time.strftime('%Y-%m-%D %H:%M:%S'), f"!!!스팟 요청 삭제 실패!!! \n{e}")
 
-def spot_ding_dong_main(instance_type, ami_id, az_name, az_id, ec2, launch_time, ding_dong_period):
-
+def spot_ding_dong_ditch(instance_type, ami_id, az_name, az_id, ec2, launch_time, ding_dong_period):
     stop_time = datetime.datetime.now() + datetime.timedelta(hours=24)
     stop_time = stop_time.astimezone(pytz.UTC)
-    next_ding_dong_time = launch_time.astimezone(pytz.UTC)
+    next_ding_dong_time = launch_time
 
     while True:
-        current_time = datetime.datetime.now()
-        current_time = current_time.astimezone(pytz.UTC)
+        current_time = datetime.datetime.now().astimezone(pytz.UTC)
 
         if current_time > next_ding_dong_time:
             create_spot_instance(instance_type, ami_id, az_name, az_id, stop_time, ec2)
@@ -121,7 +120,7 @@ if __name__ == "__main__":
     ec2 = session.client('ec2', aws_access_key_id='',
                          aws_secret_access_key='', region_name=f'{region}')
 
-    launch_time = datetime.datetime.utcnow()
+    launch_time = datetime.datetime.utcnow().astimezone(pytz.UTC)
 
     send_slack_message(instance_type, az_id, launch_time.strftime('%Y-%m-%D %H:%M:%S'), "시작")
-    spot_ding_dong_main(instance_type, ami_id, az_name, az_id, ec2, launch_time, ding_dong_period)
+    spot_ding_dong_ditch(instance_type, ami_id, az_name, az_id, ec2, launch_time, ding_dong_period)
