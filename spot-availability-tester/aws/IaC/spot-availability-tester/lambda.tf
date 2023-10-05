@@ -35,6 +35,7 @@ resource "aws_cloudwatch_event_rule" "eventbridge-rule" {
   count               = length(var.instance_types)
   name                = "${var.prefix}-${var.instance_types[count.index]}-${var.instance_types_az[count.index]}-rule"
   schedule_expression = "rate(1 minute)"
+  depends_on          = [aws_lambda_function.lambda]
 }
 
 # Target for EventBridge to trigger Lambda
@@ -53,7 +54,7 @@ EOF
 
 resource "aws_lambda_permission" "allow_cloudwatch_to_call_rw_fallout_retry_step_deletion_lambda" {
   count         = length(var.instance_types)
-  statement_id  = "AllowExecutionFromCloudWatch"
+  statement_id  = "${replace(var.instance_types[count.index], ".", "_")}-${var.instance_types_az[count.index]}"
   action        = "lambda:InvokeFunction"
   function_name = aws_lambda_function.lambda.function_name
   principal     = "events.amazonaws.com"
