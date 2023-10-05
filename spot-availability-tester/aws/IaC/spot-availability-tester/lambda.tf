@@ -1,3 +1,8 @@
+resource "aws_cloudwatch_log_group" "lambda-cloudwatch-log-group" {
+  name              = "/aws/lambda/${aws_lambda_function.lambda.function_name}"
+  retention_in_days = 30
+}
+
 locals {
   subnet_ids = jsonencode(var.subnet_ids)
 }
@@ -14,8 +19,8 @@ resource "aws_lambda_function" "lambda" {
 
   environment {
     variables = {
-      X86_AMI_ID        = data.aws_ami.amazonlinux_2023_x86_ami.id,
-      ARM_AMI_ID        = data.aws_ami.amazonlinux_2023_arm_ami.id,
+      X86_AMI_ID        = data.aws_ami.amazonlinux_2_x86_ami.id,
+      ARM_AMI_ID        = data.aws_ami.amazonlinux_2_arm_ami.id,
       VPC_ID            = var.vpc_id,
       SUBNET_IDS        = local.subnet_ids,
       SECURITY_GROUP_ID = var.security_group_id,
@@ -23,11 +28,6 @@ resource "aws_lambda_function" "lambda" {
       LOG_STREAM_NAME   = var.log_stream_name
     }
   }
-}
-
-resource "aws_cloudwatch_log_group" "lambda-cloudwatch-log-group" {
-  name              = "/aws/lambda/${aws_lambda_function.lambda.function_name}"
-  retention_in_days = 30
 }
 
 # # EventBridge Rule

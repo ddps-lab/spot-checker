@@ -4,34 +4,32 @@ data "archive_file" "lambda_source_code" {
   output_path = "spot-availability-tester.zip"
 }
 
-data "aws_ami" "amazonlinux_2023_x86_ami" {
+data "aws_ami" "amazonlinux_2_arm_ami" {
   most_recent = true
+  owners = ["amazon"]
+
   filter {
-    name   = "owner-alias"
-    values = ["amazon"]
+    name   = "architecture"
+    values = ["arm64"]
   }
-  filter {
-    name   = "virtualization-type"
-    values = ["hvm"]
-  }
+
   filter {
     name   = "name"
-    values = ["al2023-ami-*-x86_64"]
+    values = ["amzn2-ami-hvm*gp2"]
   }
 }
 
-data "aws_ami" "amazonlinux_2023_arm_ami" {
+data "aws_ami" "amazonlinux_2_x86_ami" {
   most_recent = true
+  owners = ["amazon"]
+
   filter {
-    name   = "owner-alias"
-    values = ["amazon"]
+    name   = "architecture"
+    values = ["x86_64"]
   }
-  filter {
-    name   = "virtualization-type"
-    values = ["hvm"]
-  }
+
   filter {
     name   = "name"
-    values = ["al2023-ami-*-arm64"]
+    values = ["amzn2-ami-hvm*gp2"]
   }
 }

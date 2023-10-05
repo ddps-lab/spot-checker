@@ -1,3 +1,8 @@
+resource "aws_cloudwatch_log_group" "lambda-cloudwatch-log-group" {
+  name = "/aws/lambda/${aws_lambda_function.lambda.function_name}"
+  retention_in_days = 30
+}
+
 resource "aws_lambda_function" "lambda" {
   function_name = "${var.prefix}-terminate-no-name-instances"
   architectures = ["x86_64"]
@@ -7,11 +12,6 @@ resource "aws_lambda_function" "lambda" {
   handler       = "terminate-no-name-instances.lambda_handler"
   filename      = "terminate-no-name-instances.zip"
   role          = var.lambda_role_arn
-}
-
-resource "aws_cloudwatch_log_group" "lambda-cloudwatch-log-group" {
-  name = "/aws/lambda/${aws_lambda_function.lambda.function_name}"
-  retention_in_days = 30
 }
 
 # EventBridge Rule
