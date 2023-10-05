@@ -25,24 +25,6 @@ def main():
     log_group_name = variables.log_group_name
     log_stream_name = variables.log_stream_name
 
-    session = boto3.Session(profile_name=awscli_profile)
-    logs_client = session.client('logs')
-
-    response = logs_client.describe_log_streams(
-        logGroupName=log_group_name,
-        logStreamNamePrefix=log_stream_name
-    )
-
-    # log stream이 존재하지 않는 경우 생성
-    if not response['logStreams'] or response['logStreams'][0]['logStreamName'] != log_stream_name:
-        logs_client.create_log_stream(
-            logGroupName=log_group_name,
-            logStreamName=log_stream_name
-        )
-        print(f"Created log stream {log_stream_name}.")
-    else:
-        print(f"Log stream {log_stream_name} already exists.")
-
     tf_project_dir = "./IaC"
     with open('regions.txt', 'r') as file:
         regions = file.readlines()
@@ -50,6 +32,24 @@ def main():
     instance_type_data = {}
     availability_zone_data = {}
     for region in regions:
+        session = boto3.Session(profile_name=awscli_profile, region_name=region)
+        logs_client = session.client('logs')
+
+        response = logs_client.describe_log_streams(
+            logGroupName=log_group_name,
+            logStreamNamePrefix=log_stream_name
+        )
+
+        # log stream이 존재하지 않는 경우 생성
+        if not response['logStreams'] or response['logStreams'][0]['logStreamName'] != log_stream_name:
+            logs_client.create_log_stream(
+                logGroupName=log_group_name,
+                logStreamName=log_stream_name
+            )
+            print(f"Created log stream {log_stream_name}.")
+        else:
+            print(f"Log stream {log_stream_name} already exists.")
+
         tmp_data = pd.read_csv(f'./test_data/{region}.csv')
         instance_type_data[f"{region}"] = ",".join(f'"{item}"' for item in tmp_data['InstanceType'].tolist())
         availability_zone_data[f"{region}"] = ",".join(f'"{item}"' for item in tmp_data['AZ'].tolist())
