@@ -105,8 +105,8 @@ def test_spot_instance_available(instance_type, availability_zone):
         "Timestamp": time.time(),
         "Code": code,
         "RawCode": request['Status']['Code'],
-        'RequestCreateTime': create_time,
-        'StatusUpdateTime': status_update_time
+        'RequestCreateTime': create_time.timestamp(),
+        'StatusUpdateTime': status_update_time.timestamp()
     }
     return result
 
