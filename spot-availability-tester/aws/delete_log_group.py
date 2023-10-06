@@ -36,4 +36,8 @@ def main():
 
 
 if __name__ == "__main__":
+    delete_check = input("Do you want to remove all resources??? (y/n) : ")
+    if delete_check != "y":
+        print("Interrupted!")
+        os._exit(0)
     main()
