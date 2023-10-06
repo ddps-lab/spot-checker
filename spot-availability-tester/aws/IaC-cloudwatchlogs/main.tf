@@ -23,10 +23,10 @@ resource "aws_s3_bucket_policy" "bucket_policy" {
             "Resource": "arn:aws:s3:::${aws_s3_bucket.bucket.id}",
             "Condition": {
                 "StringEquals": {
-                    "aws:SourceAccount": "${data.aws_caller_identity.current_accout.account_id}"
+                    "aws:SourceAccount": "${data.aws_caller_identity.current_account.account_id}"
                 },
                 "ArnLike": {
-                    "aws:SourceArn": "arn:aws:logs:${var.region}:${data.aws_caller_identity.current_accout.account_id}:log-group:*"
+                    "aws:SourceArn": "arn:aws:logs:${var.region}:${data.aws_caller_identity.current_account.account_id}:log-group:*"
                 }
             }
         },
@@ -39,11 +39,11 @@ resource "aws_s3_bucket_policy" "bucket_policy" {
             "Resource": "arn:aws:s3:::${aws_s3_bucket.bucket.id}/*",
             "Condition": {
                 "StringEquals": {
-                    "aws:SourceAccount": "${data.aws_caller_identity.current_accout.account_id}",
+                    "aws:SourceAccount": "${data.aws_caller_identity.current_account.account_id}",
                     "s3:x-amz-acl": "bucket-owner-full-control"
                 },
                 "ArnLike": {
-                    "aws:SourceArn": "arn:aws:logs:${var.region}:${data.aws_caller_identity.current_accout.account_id}:log-group:*"
+                    "aws:SourceArn": "arn:aws:logs:${var.region}:${data.aws_caller_identity.current_account.account_id}:log-group:*"
                 }
             }
         }
