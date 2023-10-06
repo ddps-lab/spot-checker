@@ -8,6 +8,15 @@
 ### Credentials
 **/sheet_credential.json
 
+### result data folder
+**/result_data
+
+### test data folder
+**/test_data
+
+### dataset folder
+**/dataset
+
 ### Variables
 **/variables.tf
 **/variables.sh
