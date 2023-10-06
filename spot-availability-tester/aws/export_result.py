@@ -57,12 +57,12 @@ def parse_log_data_to_csv(input_file, output_file):
 
     with open(output_file, 'w', newline='') as f:
         writer = csv.writer(f)
-        writer.writerow(["InstanceType", "AZ", "Timestamp", "Code", "RawCode"])  # 헤더
+        writer.writerow(["InstanceType", "AZ", "Timestamp", "Code", "RawCode", "CreateTime", "RequestCreateTime", "StatusUpdateTime"])  # 헤더
 
         for line in lines:
             log_timestamp, log_data = line.split(' ', 1)
             log_json = json.loads(log_data.strip())
-            writer.writerow([log_json['InstanceType'], log_json['AZ'], log_json['Timestamp'], log_json['Code'], log_json['RawCode']])
+            writer.writerow([log_json['InstanceType'], log_json['AZ'], log_json['Timestamp'], log_json['Code'], log_json['RawCode'], log_json['RequestCreateTime'], log_json['StatusUpdateTime']])
 
 def download_result(s3_client, bucket_name, log_stream_name, region, result_folder_path):
     # 버킷에서 객체 목록 조회
