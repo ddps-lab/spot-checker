@@ -2,6 +2,7 @@ variable "prefix" {}
 variable "lambda_role_arn" {}
 variable "vpc_id" {}
 variable "subnet_ids" {}
+variable "subnet_az_names" {}
 variable "security_group_id" {}
 variable "log_group_name" {}
 variable "log_stream_name" {}

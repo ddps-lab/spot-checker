@@ -13,6 +13,7 @@ X86_AMI_ID = os.environ['X86_AMI_ID']
 ARM_AMI_ID = os.environ['ARM_AMI_ID']
 VPC_ID = os.environ['VPC_ID']
 SUBNET_IDS = json.loads(os.environ['SUBNET_IDS'])
+SUBNET_AZ_NAMES = json.loads(os.environ['SUBNET_AZ_NAMES'])
 SECURITY_GROUP_IDS = [os.environ['SECURITY_GROUP_ID']]
 LOG_GROUP_NAME = os.environ['LOG_GROUP_NAME']
 LOG_STREAM_NAME = os.environ['LOG_STREAM_NAME']
@@ -58,14 +59,14 @@ def test_spot_instance_available(instance_type, availability_zone):
         LaunchSpecification={
             'ImageId': ami_id,
             'InstanceType': instance_type,
-            'SubnetId': SUBNET_IDS[ord(availability_zone[-1]) - ord('a')],
+            'SubnetId': SUBNET_IDS[SUBNET_AZ_NAMES.index(availability_zone)],
             'SecurityGroupIds': SECURITY_GROUP_IDS,
             'Placement': {
                 "AvailabilityZone": availability_zone
             }
         }
     )
-
+    create_time = spot_request['SpotInstanceRequests'][0]['CreateTime']
     spot_request_id = spot_request['SpotInstanceRequests'][0]['SpotInstanceRequestId']
     global code
     print("start describe")
@@ -93,6 +94,7 @@ def test_spot_instance_available(instance_type, availability_zone):
         else:
             time.sleep(1)
 
+    status_update_time = response['SpotInstanceRequests'][0]['Status']['UpdateTime']
     cancel_spot_request = ec2.cancel_spot_instance_requests(
         SpotInstanceRequestIds=[spot_request_id]
     )
@@ -102,7 +104,9 @@ def test_spot_instance_available(instance_type, availability_zone):
         "AZ": availability_zone,
         "Timestamp": time.time(),
         "Code": code,
-        "RawCode": request['Status']['Code']
+        "RawCode": request['Status']['Code'],
+        'RequestCreateTime': create_time,
+        'StatusUpdateTime': status_update_time
     }
     return result
 

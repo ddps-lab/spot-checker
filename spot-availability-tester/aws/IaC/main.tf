@@ -18,6 +18,7 @@ module "spot-availability-tester" {
   lambda_role_arn = aws_iam_role.spot-availability-tester-lambda-role.arn
   vpc_id = module.vpc.vpc_id
   subnet_ids = module.vpc.subnet_ids
+  subnet_az_names = module.vpc.subnet_az_names
   security_group_id = module.vpc.security_group_id
   instance_types = var.instance_types
   instance_types_az = var.instance_types_az
