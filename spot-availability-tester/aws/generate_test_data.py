@@ -1,15 +1,17 @@
 import pandas as pd
+import pickle
 
 region = "us-east-1"
+
+az_map_dict = pickle.load(open('./dataset/az_map_dict.pkl', 'rb'))
 
 low_data = pd.read_csv(f'./dataset/{region}/sps_low.csv')
 medium_data = pd.read_csv(f'./dataset/{region}/sps_medium.csv')
 high_data = pd.read_csv(f'./dataset/{region}/sps_high.csv')
 
 def az_id_to_actual_name(az_id, region):
-    last_digit = az_id[-1]
-    az_name_suffix = chr(96 + int(last_digit))
-    return f"{region}{az_name_suffix}"
+    az_name = az_map_dict[(region, az_id)]
+    return az_name
 
 def extract_and_transform_actual_name(df):
     df['AZ'] = df.apply(lambda row: az_id_to_actual_name(row['AZ'], row['Region']), axis=1)
