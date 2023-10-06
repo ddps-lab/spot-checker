@@ -1,5 +1,5 @@
 resource "aws_iam_role" "spot-availability-tester-lambda-role" {
-  name = "${var.prefix}-spot-availability-tester"
+  name = "${var.prefix}-spot-availability-tester-${var.region}-role"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -26,7 +26,7 @@ resource "aws_iam_role_policy_attachment" "spot-availability-tester-lambda_EC2_p
 }
 
 resource "aws_iam_role" "terminate-no-name-instance-lambda-role" {
-  name = "${var.prefix}-terminate-no-name-instances-role"
+  name = "${var.prefix}-terminate-no-name-instances-${var.region}-role"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"

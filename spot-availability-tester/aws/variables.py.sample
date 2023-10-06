@@ -1,4 +1,3 @@
 awscli_profile = ""
 prefix = ""
-log_group_name = ""
 log_stream_name = ""

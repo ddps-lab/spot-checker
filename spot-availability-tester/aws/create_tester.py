@@ -17,17 +17,16 @@ def run_command(command):
     else:
         print(out.decode())
 
-
 def main():
     # Change this
     awscli_profile = variables.awscli_profile
     prefix = variables.prefix
-    log_group_name = variables.log_group_name
+    log_group_name = f"{prefix}-spot-availability-tester-log"
     log_stream_name = variables.log_stream_name
 
     tf_project_dir = "./IaC"
-    with open('regions.txt', 'r') as file:
-        regions = file.readlines()
+    with open('regions.txt', 'r', encoding='utf-8') as file:
+        regions = [line.strip() for line in file.readlines()]
 
     instance_type_data = {}
     availability_zone_data = {}
@@ -46,7 +45,6 @@ def main():
                 logGroupName=log_group_name,
                 logStreamName=log_stream_name
             )
-            print(f"Created log stream {log_stream_name}.")
         else:
             print(f"Log stream {log_stream_name} already exists.")
 
@@ -58,7 +56,7 @@ def main():
     for region in regions:
         run_command(["terraform", "workspace", "new", f"{region}"])
         run_command(["terraform", "init"])
-        run_command(["terraform", "apply", "--auto-approve", "--var", f"region={region}", "--var", f"prefix={prefix}","--var", f"awscli_profile={awscli_profile}", "--var", f"log_group_name={log_group_name}", "--var", f"log_stream_name={log_stream_name}", "--var", f"instance_types=[{instance_type_data[region]}]", "--var", f"instance_types_az=[{availability_zone_data[region]}]"])
+        run_command(["terraform", "apply", "--parallelism=150", "--auto-approve", "--var", f"region={region}", "--var", f"prefix={prefix}","--var", f"awscli_profile={awscli_profile}", "--var", f"log_group_name={log_group_name}", "--var", f"log_stream_name={log_stream_name}", "--var", f"instance_types=[{instance_type_data[region]}]", "--var", f"instance_types_az=[{availability_zone_data[region]}]"])
 
 
 if __name__ == "__main__":
