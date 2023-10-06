@@ -55,7 +55,7 @@ def main():
         run_command(["terraform", "destroy", "--parallelism=150", "--target=module.spot-availability-tester", "--auto-approve", "--var", f"region={region}", "--var", f"prefix={prefix}","--var", f"awscli_profile={awscli_profile}", "--var", f"log_group_name={log_group_name}", "--var", f"log_stream_name={log_stream_name}", "--var", f"instance_types=[{instance_type_data[region]}]", "--var", f"instance_types_az=[{availability_zone_data[region]}]"])
 
     print("Wait for terminate all of instances...")
-    time.sleep(120)
+    time.sleep(150)
     print("Instance terimnate finished!")
 
     for region in regions:
