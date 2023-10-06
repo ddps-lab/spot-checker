@@ -18,8 +18,8 @@ with open('regions.txt', 'r', encoding='utf-8') as file:
 instance_type_data = {}
 availability_zone_data = {}
 
-if not os.path.exists(f'./result_data/{result_folder_path}'):
-    os.makedirs(f'./result_data/{result_folder_path}')
+if not os.path.exists(f'./test_data'):
+    os.makedirs(f'./test_data')
 
 for region in regions:
     # low_data = pd.read_csv(f'./dataset/{region}/sps_low.csv')
