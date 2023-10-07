@@ -36,7 +36,7 @@ resource "aws_lambda_function" "lambda" {
 resource "aws_cloudwatch_event_rule" "eventbridge-rule" {
   count               = length(var.instance_types)
   name                = "${var.prefix}-${var.instance_types[count.index]}-${var.instance_types_az[count.index]}-rule"
-  schedule_expression = "rate(1 minute)"
+  schedule_expression = var.lambda_rate
   depends_on          = [aws_lambda_function.lambda]
 }
 
