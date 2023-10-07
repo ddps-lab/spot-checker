@@ -23,7 +23,7 @@ resource "aws_lambda_function" "lambda" {
 
 # EventBridge Rule
 resource "aws_cloudwatch_event_rule" "eventbridge-rule" {
-  name                = "terminate-pending-instances"
+  name                = "${var.prefix}-terminate-pending-instances"
   event_pattern = jsonencode({
     source = ["aws.ec2"],
     detail-type = ["EC2 Instance State-change Notification"],
@@ -36,7 +36,7 @@ resource "aws_cloudwatch_event_rule" "eventbridge-rule" {
 # Target for EventBridge to trigger Lambda
 resource "aws_cloudwatch_event_target" "eventbridge-target" {
   rule      = aws_cloudwatch_event_rule.eventbridge-rule.name
-  target_id = "terminate-pending-instances"
+  target_id = "${var.prefix}-terminate-pending-instances"
   arn       = aws_lambda_function.lambda.arn
 }
 

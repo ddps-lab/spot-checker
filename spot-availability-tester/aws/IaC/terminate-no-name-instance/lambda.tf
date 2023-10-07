@@ -23,14 +23,14 @@ resource "aws_lambda_function" "lambda" {
 
 # EventBridge Rule
 resource "aws_cloudwatch_event_rule" "eventbridge-rule" {
-  name                = "one-minute-terminate-no-name-instances"
+  name                = "${var.prefix}-one-minute-terminate-no-name-instances"
   schedule_expression = "rate(1 minute)"
 }
 
 # Target for EventBridge to trigger Lambda
 resource "aws_cloudwatch_event_target" "eventbridge-target" {
   rule      = aws_cloudwatch_event_rule.eventbridge-rule.name
-  target_id = "one-minute-terminate-no-name-instances"
+  target_id = "${var.prefix}-one-minute-terminate-no-name-instances"
   arn       = aws_lambda_function.lambda.arn
 }
 
