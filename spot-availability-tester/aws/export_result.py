@@ -123,7 +123,7 @@ def download_result(s3_client, bucket_name, log_stream_name, log_type, region, r
     
     df_list = [pd.read_csv(f"./result_data/{result_folder_path}/{region}/{log_type}/{file}.csv") for file in file_names]
     if not df_list:
-        return False
+        return 0
     combined_df = pd.concat(df_list, ignore_index=True)
     combined_df.to_csv(f'./result_data/{result_folder_path}/{region}/{log_type}/result.csv', index=False)
 
@@ -132,10 +132,16 @@ def download_result(s3_client, bucket_name, log_stream_name, log_type, region, r
             os.remove(f"./result_data/{result_folder_path}/{region}/{log_type}/{file_name}.csv")
 
     print(f"Region {region} {log_type} log export complete!")
-    return True
 
 def merge_csv_files(log_type, regions, result_folder_path):
-    df_list = [pd.read_csv(f"./result_data/{result_folder_path}/{region}/{log_type}/result.csv") for region in regions]
+    df_list = []
+    
+    for region in regions:
+        file_path = f"./result_data/{result_folder_path}/{region}/{log_type}/result.csv"
+        
+        if os.path.exists(file_path):
+            df_list.append(pd.read_csv(file_path))
+    
     combined_df = pd.concat(df_list, ignore_index=True)
     combined_df.to_csv(f'./result_data/{result_folder_path}/{log_type}_result.csv', index=False)
 
@@ -175,16 +181,13 @@ def main():
         s3_client = boto3_session.client('s3')
         empty_s3_bucket(f"{prefix}-spot-availability-tester-log-{region}", s3_resource)
         export_logs_to_s3(boto3_session, log_group_name, milliseconds_start_time, milliseconds_end_time, f"{prefix}-spot-availability-tester-log-{region}", "spot-availability-test", region)
-        spot_download = download_result(s3_client, f"{prefix}-spot-availability-tester-log-{region}", spot_log_stream_name, "spot", region, result_folder_path)
-        terminate_download = download_result(s3_client, f"{prefix}-spot-availability-tester-log-{region}", terminate_log_stream_name, "terminate", region, result_folder_path)
-        pending_download = download_result(s3_client, f"{prefix}-spot-availability-tester-log-{region}", pending_log_stream_name, "pending", region, result_folder_path)
+        download_result(s3_client, f"{prefix}-spot-availability-tester-log-{region}", spot_log_stream_name, "spot", region, result_folder_path)
+        download_result(s3_client, f"{prefix}-spot-availability-tester-log-{region}", terminate_log_stream_name, "terminate", region, result_folder_path)
+        download_result(s3_client, f"{prefix}-spot-availability-tester-log-{region}", pending_log_stream_name, "pending", region, result_folder_path)
 
-    if spot_download:
-        merge_csv_files("spot", regions, result_folder_path)
-    if terminate_download:
-        merge_csv_files("terminate", regions, result_folder_path)
-    if pending_download:
-        merge_csv_files("pending", regions, result_folder_path)
+    merge_csv_files("spot", regions, result_folder_path)
+    merge_csv_files("terminate", regions, result_folder_path)
+    merge_csv_files("pending", regions, result_folder_path)
 
 if __name__ == "__main__":
     main()
