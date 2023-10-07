@@ -10,8 +10,16 @@ module "terminate-no-name-instances" {
   source = "./terminate-no-name-instance"
   prefix = var.prefix
   lambda_role_arn = aws_iam_role.terminate-no-name-instance-lambda-role.arn
-  log_group_name = var.terminate_no_name_instance_log_group_name
+  log_group_name = var.log_group_name
   log_stream_name = var.terminate_log_stream_name
+}
+
+module "terminate-pending-instances" {
+  source = "./terminate-pending-instance"
+  prefix = var.prefix
+  lambda_role_arn = aws_iam_role.terminate-pending-instance-lambda-role.arn
+  log_group_name = var.log_group_name
+  log_stream_name = var.pending_log_stream_name
 }
 
 module "spot-availability-tester" {
@@ -24,6 +32,7 @@ module "spot-availability-tester" {
   security_group_id = module.vpc.security_group_id
   instance_types = var.instance_types
   instance_types_az = var.instance_types_az
-  log_group_name = var.spot_availability_tester_log_group_name
+  log_group_name = var.log_group_name
   log_stream_name = var.spot_log_stream_name
+  lambda_rate = var.lambda_rate
 }
