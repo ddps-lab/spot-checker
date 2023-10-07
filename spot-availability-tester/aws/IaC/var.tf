@@ -14,12 +14,22 @@ variable "prefix" {
 }
 
 # must define exist cloudwatch log (from IaC-cloudwatch)
-variable "log_group_name" {
+variable "spot_availability_tester_log_group_name" {
   type = string
   default = ""
 }
 
-variable "log_stream_name" {
+variable "terminate_no_name_instance_log_group_name" {
+  type = string
+  default = ""
+}
+
+variable "spot_log_stream_name" {
+  type = string
+  default = ""
+}
+
+variable "terminate_log_stream_name" {
   type = string
   default = ""
 }

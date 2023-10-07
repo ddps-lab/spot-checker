@@ -21,7 +21,7 @@ def empty_s3_bucket(bucket_name, s3_resource):
     for obj in bucket.objects.all():
         obj.delete()
 
-def export_logs_to_s3(boto3_session, log_group_name, start_time, end_time, destination_bucket, region):
+def export_logs_to_s3(boto3_session, log_group_name, log_type, start_time, end_time, destination_bucket, bucket_prefix, region):
     client = boto3_session.client('logs')
 
     # Start the export task
@@ -30,7 +30,7 @@ def export_logs_to_s3(boto3_session, log_group_name, start_time, end_time, desti
         fromTime=start_time,
         to=end_time,
         destination=destination_bucket,
-        destinationPrefix="logs"
+        destinationPrefix=bucket_prefix
     )
     
     task_id = response['taskId']
@@ -39,7 +39,7 @@ def export_logs_to_s3(boto3_session, log_group_name, start_time, end_time, desti
         status = response['exportTasks'][0]['status']['code']
 
         if status in ['COMPLETED', 'FAILED']:
-            print(f"Region {region} CloudWatch Logs to S3 Export task {status.lower()}!")
+            print(f"Region {region} {log_type} log CloudWatch Logs to S3 Export task {status.lower()}!")
             break
         else:
             time.sleep(2)
@@ -51,7 +51,7 @@ def datetime_to_utc_milliseconds(datetime_str):
     utc_timestamp = int(dt.timestamp())  # Convert datetime to UTC timestamp in seconds
     return utc_timestamp * 1000  # Convert to milliseconds
 
-def parse_log_data_to_csv(input_file, output_file):
+def spot_log_parse_log_data_to_csv(input_file, output_file):
     with open(input_file, 'r') as f:
         lines = f.readlines()
 
@@ -64,7 +64,21 @@ def parse_log_data_to_csv(input_file, output_file):
             log_json = json.loads(log_data.strip())
             writer.writerow([log_json['InstanceType'], log_json['AZ'], log_json['Timestamp'], log_json['Code'], log_json['RawCode'], log_json['RequestCreateTime'], log_json['StatusUpdateTime']])
 
-def download_result(s3_client, bucket_name, log_stream_name, region, result_folder_path):
+def terminate_log_parse_log_data_to_csv(input_file, output_file):
+    with open(input_file, 'r') as f:
+        lines = f.readlines()
+
+    with open(output_file, 'w', newline='') as f:
+        writer = csv.writer(f)
+        writer.writerow(["LaunchTime", "TerminateTime", "BillingTime", "InstanceId", "InstanceType", "AvailabilityZone"])  # 헤더
+
+        for line in lines:
+            log_timestamp, log_data = line.split(' ', 1)
+            log_json = json.loads(log_data.strip())
+            writer.writerow([log_json['LaunchTime'], log_json['TerminateTime'], log_json['BillingTime'], log_json['InstanceId'], log_json['InstanceType'], log_json['AvailabilityZone']])
+
+#수정 필요
+def download_result(s3_client, bucket_name, log_stream_name, log_type, region, result_folder_path):
     # 버킷에서 객체 목록 조회
     objects = s3_client.list_objects_v2(Bucket=bucket_name)
     
@@ -74,37 +88,46 @@ def download_result(s3_client, bucket_name, log_stream_name, region, result_fold
         if log_stream_name in obj['Key']:
             log_paths.append(obj['Key'])
     
-    if not os.path.exists(f'/tmp/spot-availability-test/{region}'):
-        os.makedirs(f'/tmp/spot-availability-test/{region}')
+    if not os.path.exists(f'/tmp/spot-availability-test/{region}/{log_type}'):
+        os.makedirs(f'/tmp/spot-availability-test/{region}/{log_type}')
     
-    if not os.path.exists(f'./result_data/{result_folder_path}/{region}'):
-        os.makedirs(f'./result_data/{result_folder_path}/{region}')
+    if not os.path.exists(f'./result_data/{result_folder_path}/{region}/{log_type}'):
+        os.makedirs(f'./result_data/{result_folder_path}/{region}/{log_type}')
 
     gz_file_names = [path.split("/")[-1] for path in log_paths]
     file_names = [name.replace(".gz", "") for name in gz_file_names]
 
     for log_path, gz_file_name, file_name in zip(log_paths, gz_file_names, file_names):
-        download_path = os.path.join(f'/tmp/spot-availability-test/{region}/{gz_file_name}')
+        download_path = os.path.join(f'/tmp/spot-availability-test/{region}/{log_type}/{gz_file_name}')
         s3_client.download_file(bucket_name, log_path, download_path)
-        subprocess.run(f"cd /tmp/spot-availability-test/{region}/ && gunzip {gz_file_name}", shell=True, text=True)
-        parse_log_data_to_csv(f"/tmp/spot-availability-test/{region}/{file_name}", f"./result_data/{result_folder_path}/{region}/{file_name}.csv")
+        subprocess.run(f"cd /tmp/spot-availability-test/{region}/{log_type} && gunzip {gz_file_name}", shell=True, text=True)
+        if log_type == "spot":
+            spot_log_parse_log_data_to_csv(f"/tmp/spot-availability-test/{region}/{log_type}/{file_name}", f"./result_data/{result_folder_path}/{region}/{log_type}/{file_name}.csv")
+        else:
+            terminate_log_parse_log_data_to_csv(f"/tmp/spot-availability-test/{region}/{log_type}/{file_name}", f"./result_data/{result_folder_path}/{region}/{log_type}/{file_name}.csv")
     
-    df_list = [pd.read_csv(f"./result_data/{result_folder_path}/{region}/{file}.csv") for file in file_names]
+    df_list = [pd.read_csv(f"./result_data/{result_folder_path}/{region}/{log_type}/{file}.csv") for file in file_names]
     combined_df = pd.concat(df_list, ignore_index=True)
-    combined_df.to_csv(f'./result_data/{result_folder_path}/{region}/result.csv', index=False)
+    combined_df.to_csv(f'./result_data/{result_folder_path}/{region}/{log_type}/result.csv', index=False)
 
     for file_name in file_names:
-        if os.path.exists(f"./result_data/{result_folder_path}/{region}/{file_name}.csv"):
-            os.remove(f"./result_data/{result_folder_path}/{region}/{file_name}.csv")
+        if os.path.exists(f"./result_data/{result_folder_path}/{region}/{log_type}/{file_name}.csv"):
+            os.remove(f"./result_data/{result_folder_path}/{region}/{log_type}/{file_name}.csv")
 
-    print(f"Region {region} export complete!")
+    print(f"Region {region} {log_type} log export complete!")
 
+def merge_csv_files(log_type, regions, result_folder_path):
+    df_list = [pd.read_csv(f"./result_data/{result_folder_path}/{region}/{log_type}/result.csv") for region in regions]
+    combined_df = pd.concat(df_list, ignore_index=True)
+    combined_df.to_csv(f'./result_data/{result_folder_path}/{log_type}_result.csv', index=False)
 
 def main():
     awscli_profile = variables.awscli_profile
     prefix = variables.prefix
-    log_group_name = f"{prefix}-spot-availability-tester-log"
-    log_stream_name = variables.log_stream_name
+    spot_availability_tester_log_group_name = f"{prefix}-spot-availability-tester-log"
+    terminate_no_name_instance_log_group_name = f"{prefix}-terminate-no-name-instance-log"
+    spot_log_stream_name = f"{variables.log_stream_name}-spot"
+    terminate_log_stream_name = f"{variables.log_stream_name}-terminate"
 
     # start_time = input("Enter the log start time ex)2020-10-10 10:10 : ")
     # end_time = input("Enter the log end time ex)2020-10-10 10:10 : ")
@@ -133,8 +156,13 @@ def main():
         s3_resource = boto3_session.resource('s3')
         s3_client = boto3_session.client('s3')
         empty_s3_bucket(f"{prefix}-spot-availability-tester-log-{region}", s3_resource)
-        export_logs_to_s3(boto3_session, log_group_name, milliseconds_start_time, milliseconds_end_time, f"{prefix}-spot-availability-tester-log-{region}", region)
-        download_result(s3_client, f"{prefix}-spot-availability-tester-log-{region}", log_stream_name, region, result_folder_path)
+        export_logs_to_s3(boto3_session, spot_availability_tester_log_group_name, "spot", milliseconds_start_time, milliseconds_end_time, f"{prefix}-spot-availability-tester-log-{region}", "spot-availability-tester", region)
+        export_logs_to_s3(boto3_session, terminate_no_name_instance_log_group_name, "terminate", milliseconds_start_time, milliseconds_end_time, f"{prefix}-spot-availability-tester-log-{region}", "terminate-no-name-instance", region)
+        download_result(s3_client, f"{prefix}-spot-availability-tester-log-{region}", spot_log_stream_name, "spot", region, result_folder_path)
+        download_result(s3_client, f"{prefix}-spot-availability-tester-log-{region}", terminate_log_stream_name, "terminate", region, result_folder_path)
+
+    merge_csv_files("spot", regions, result_folder_path)
+    merge_csv_files("terminate", regions, result_folder_path)
 
 if __name__ == "__main__":
     main()
