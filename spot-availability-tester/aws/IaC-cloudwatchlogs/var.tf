@@ -13,7 +13,12 @@ variable "prefix" {
   default = ""
 }
 
-variable "log_group_name" {
+variable "spot_availability_tester_log_group_name" {
+  type = string
+  default = ""
+}
+
+variable "terminate_no_name_instance_log_group_name" {
   type = string
   default = ""
 }

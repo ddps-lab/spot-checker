@@ -12,6 +12,13 @@ resource "aws_lambda_function" "lambda" {
   handler       = "terminate-no-name-instances.lambda_handler"
   filename      = "terminate-no-name-instances.zip"
   role          = var.lambda_role_arn
+
+  environment {
+    variables = {
+      LOG_GROUP_NAME    = var.log_group_name,
+      LOG_STREAM_NAME   = var.log_stream_name
+    }
+  }
 }
 
 # EventBridge Rule

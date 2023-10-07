@@ -20,7 +20,8 @@ def run_command(command):
 def main():
     awscli_profile = variables.awscli_profile
     prefix = variables.prefix
-    log_group_name = f"{prefix}-spot-availability-tester-log"
+    spot_availability_tester_log_group_name = f"{prefix}-spot-availability-tester-log"
+    terminate_no_name_instance_log_group_name = f"{prefix}-terminate-no-name-instance-log"
 
     tf_project_dir = "./IaC-cloudwatchlogs"
     with open('regions.txt', 'r', encoding='utf-8') as file:
@@ -30,7 +31,7 @@ def main():
     for region in regions:
         run_command(["terraform", "workspace", "new", f"{region}"])
         run_command(["terraform", "init"])
-        run_command(["terraform", "apply", "--auto-approve", "--var", f"region={region}", "--var", f"prefix={prefix}","--var", f"awscli_profile={awscli_profile}","--var", f"log_group_name={log_group_name}"])
+        run_command(["terraform", "apply", "--auto-approve", "--var", f"region={region}", "--var", f"prefix={prefix}","--var", f"awscli_profile={awscli_profile}", "--var", f"spot_availability_tester_log_group_name={spot_availability_tester_log_group_name}", "--var", f"terminate_no_name_instance_log_group_name={terminate_no_name_instance_log_group_name}"])
 
 
 if __name__ == "__main__":

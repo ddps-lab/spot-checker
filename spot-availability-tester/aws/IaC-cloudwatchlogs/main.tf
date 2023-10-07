@@ -1,5 +1,10 @@
-resource "aws_cloudwatch_log_group" "log_group" {
-  name              = var.log_group_name
+resource "aws_cloudwatch_log_group" "spot_availability_tester_log_group" {
+  name              = var.spot_availability_tester_log_group_name
+  retention_in_days = 90
+}
+
+resource "aws_cloudwatch_log_group" "terminate_no_name_instance_log_group" {
+  name              = var.terminate_no_name_instance_log_group_name
   retention_in_days = 90
 }
 
