@@ -27,7 +27,7 @@ def lambda_handler(event, context):
     for reservation in response['Reservations']:
         for instance in reservation['Instances']:
             name_tags = [tag['Value'] for tag in instance.get('Tags', []) if tag['Key'] == 'Name']
-            if ((not name_tags or not name_tags[0]) and instance['State']['Name'] != "terminated"):
+            if ((not name_tags or not name_tags[0]) and instance['State']['Name'] != "terminated" and instance['State']['Name'] != "shutting-down"):
                 instances_to_terminate.append(instance['InstanceId'])
                 launch_time = (instance['LaunchTime']).timestamp()
                 terminate_time = time.time()
@@ -36,8 +36,9 @@ def lambda_handler(event, context):
                     "TerminateTime": terminate_time,
                     "BillingTime": terminate_time - launch_time,
                     "InstanceId": instance['InstanceId'],
+                    "InstanceState": instance['State']['Name'],
                     "InstanceType": instance['InstanceType'],
-                    "AvailabilityZone": instance['Placement']['AvailabilityZone']
+                    "AvailabilityZone": instance['Placement']['AvailabilityZone'],
                 }
                 instances_logs.append(tmp_data)
 
