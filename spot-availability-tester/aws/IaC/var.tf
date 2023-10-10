@@ -14,12 +14,7 @@ variable "prefix" {
 }
 
 # must define exist cloudwatch log (from IaC-cloudwatch)
-variable "spot_availability_tester_log_group_name" {
-  type = string
-  default = ""
-}
-
-variable "terminate_no_name_instance_log_group_name" {
+variable "log_group_name" {
   type = string
   default = ""
 }
@@ -34,6 +29,11 @@ variable "terminate_log_stream_name" {
   default = ""
 }
 
+variable "pending_log_stream_name" {
+  type = string
+  default = ""
+}
+
 variable "instance_types" {
   type = list(string)
   default = []
@@ -42,4 +42,9 @@ variable "instance_types" {
 variable "instance_types_az" {
   type = list(string)
   default = []
+}
+
+variable "lambda_rate" {
+  type = string
+  default = ""
 }

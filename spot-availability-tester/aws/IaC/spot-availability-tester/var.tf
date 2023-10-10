@@ -8,3 +8,4 @@ variable "log_group_name" {}
 variable "log_stream_name" {}
 variable "instance_types" {}
 variable "instance_types_az" {}
+variable "lambda_rate" {}
