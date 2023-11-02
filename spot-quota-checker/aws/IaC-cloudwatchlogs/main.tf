@@ -4,7 +4,7 @@ resource "aws_cloudwatch_log_group" "spot_availability_tester_log_group" {
 }
 
 resource "aws_s3_bucket" "bucket" {
-  bucket = "${var.prefix}-spot-availability-tester-log-${var.region}"
+  bucket = "${var.prefix}-spot-quota-checker-log-${var.region}"
   force_destroy = true
 }
 
