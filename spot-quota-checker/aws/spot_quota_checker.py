@@ -149,15 +149,8 @@ def check_spot_quota(region, boto3_session):
             vCPU_Counts['STANDARD'] = vCPU_Counts['STANDARD'] + vcpu_num
 
     region_vCPU_Percent = {
-        "INF": vCPU_Counts['INF'] / ALL_QUOTA_INFO[region]['INF'],
-        "TRN": vCPU_Counts['TRN'] / ALL_QUOTA_INFO[region]['TRN'],
-        "DL": vCPU_Counts['DL'] / ALL_QUOTA_INFO[region]['DL'],
-        "G_VT": vCPU_Counts['G_VT'] / ALL_QUOTA_INFO[region]['G_VT'],
-        "P5": vCPU_Counts['P5'] / ALL_QUOTA_INFO[region]['P5'],
-        "P2_P3_P4": vCPU_Counts['P2_P3_P4'] / ALL_QUOTA_INFO[region]['P2_P3_P4'],
-        "F": vCPU_Counts['F'] / ALL_QUOTA_INFO[region]['F'],
-        "X": vCPU_Counts['X'] / ALL_QUOTA_INFO[region]['X'],
-        "STANDARD": vCPU_Counts['STANDARD'] / ALL_QUOTA_INFO[region]['STANDARD']      
+        key: 0 if vCPU_Counts[key] == 0 or ALL_QUOTA_INFO[region][key] == 0 else vCPU_Counts[key] / ALL_QUOTA_INFO[region][key]
+        for key in vCPU_Counts
     }
 
     result = {
