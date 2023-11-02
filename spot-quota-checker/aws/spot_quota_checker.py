@@ -15,10 +15,27 @@ with open('all_vcpu_info.pkl', 'rb') as f:
 with open('all_vcpu_quota_info.pkl', 'rb') as f:
     ALL_QUOTA_INFO = pickle.load(f)
 
-def get_vcpu_number(region,instance_type):
+def create_log_stream(log_group_name, log_stream_name, boto3_session):
+    logs_client = boto3_session.client('logs')
+    response = logs_client.describe_log_streams(
+        logGroupName=log_group_name,
+        logStreamNamePrefix=log_stream_name
+    )
+
+    # log stream이 존재하지 않는 경우 생성
+    if not response['logStreams'] or response['logStreams'][0]['logStreamName'] != log_stream_name:
+        logs_client.create_log_stream(
+            logGroupName=log_group_name,
+            logStreamName=log_stream_name
+        )
+    else:
+        print(f"Log stream {log_stream_name} already exists.")
+
+
+def get_vcpu_number(region, instance_type):
     return int(ALL_VCPU_INFO.get(region, {}).get(instance_type, None))
 
-def get_quota_number(region,quota_name):
+def get_quota_number(region, quota_name):
     return int(ALL_QUOTA_INFO.get(region, {}).get(quota_name, None))
 
 def create_log_event(result, boto3_session):
@@ -151,6 +168,10 @@ def main():
             boto3_session = boto3.Session(
                 profile_name=AWS_CLI_PROFILE_NAME, region_name=region)
         boto3_session_list.append(boto3_session)
+
+    for region_index, region in enumerate(regions):
+        create_log_stream(LOG_GROUP_NAME, LOG_STREAM_NAME, boto3_session_list[region_index])
+        
     while True:
         for region_index, region in enumerate(regions):
             result = check_spot_quota(region, boto3_session_list[region_index])
