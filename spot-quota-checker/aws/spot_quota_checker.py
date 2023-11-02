@@ -155,7 +155,6 @@ def main():
         for region_index, region in enumerate(regions):
             result = check_spot_quota(region, boto3_session_list[region_index])
             create_log_event(json.dumps(result), boto3_session_list[region_index])
-            print(result)
         time.sleep(5)
 
 
