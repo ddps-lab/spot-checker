@@ -57,12 +57,12 @@ def log_parse_log_data_to_csv(input_file, output_file):
 
     with open(output_file, 'w', newline='') as f:
         writer = csv.writer(f)
-        writer.writerow(["Region", "vCPU_Count", "Timestamp"])  # 헤더
+        writer.writerow(["Region", "vCPU_Count", "region_vCPU_Percent", "Timestamp"])  # 헤더
 
         for line in lines:
             log_timestamp, log_data = line.split(' ', 1)
             log_json = json.loads(log_data.strip())
-            writer.writerow([log_json['Region'], log_json['vCPU_Count'], log_json['Timestamp']])
+            writer.writerow([log_json['Region'], log_json['vCPU_Count'], log_json['region_vCPU_Percent'], log_json['Timestamp']])
 
 #수정 필요
 def download_result(s3_client, bucket_name, log_stream_name, region, result_folder_path):
