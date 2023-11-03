@@ -1,6 +1,5 @@
 # Not For Lambda, Just Run in AWS EC2
 # Need regions.txt in same directory
-import re
 import boto3
 import spot_quota_checker_variables
 import time
@@ -168,7 +167,7 @@ def main():
         regions = [line.strip() for line in file.readlines()]
 
     for region in regions:
-        if AWS_CLI_PROFILE_NAME == None:
+        if AWS_CLI_PROFILE_NAME == "":
             boto3_session = boto3.Session(region_name=region)
         else:
             boto3_session = boto3.Session(
