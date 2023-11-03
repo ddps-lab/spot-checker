@@ -44,16 +44,5 @@ for region_index, region in enumerate(regions):
     instance_types_data = get_all_instance_types(boto3_session_list[region_index])
     all_instance_types_data[region] = instance_types_data
 
-# def get_vcpu_count(region, instance_type):
-#     return all_instance_types_data.get(region, {}).get(instance_type, None)
-
-# region = 'ap-northeast-2'
-# instance_type = 't2.micro'
-# vcpu_count = get_vcpu_count(region, instance_type)
-# if vcpu_count is not None:
-#     print(f'The {instance_type} instance type has {vcpu_count} vCPUs.')
-# else:
-#     print(f'Unknown instance type: {instance_type}')
-
 with open('all_vcpu_info.pkl', 'wb') as f:
     pickle.dump(all_instance_types_data, f)
