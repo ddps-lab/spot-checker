@@ -153,12 +153,12 @@ def main():
     terminate_log_stream_name = f"{variables.log_stream_name}-terminate"
     pending_log_stream_name = f"{variables.log_stream_name}-pending"
 
-    # start_time = input("Enter the log start time ex)2020-10-10 10:10 : ")
-    # end_time = input("Enter the log end time ex)2020-10-10 10:10 : ")
-    # milliseconds_start_time = datetime_to_utc_milliseconds(start_time)
-    # milliseconds_end_time = datetime_to_utc_milliseconds(end_time)
-    milliseconds_start_time = datetime_to_utc_milliseconds("2023-10-01 00:00")
-    milliseconds_end_time = datetime_to_utc_milliseconds("2023-11-01 00:00")
+    start_time = input("Enter the log start time ex)2020-10-10 10:10 : ")
+    end_time = input("Enter the log end time ex)2020-10-10 10:10 : ")
+    milliseconds_start_time = datetime_to_utc_milliseconds(start_time)
+    milliseconds_end_time = datetime_to_utc_milliseconds(end_time)
+    # milliseconds_start_time = datetime_to_utc_milliseconds("2023-10-01 00:00")
+    # milliseconds_end_time = datetime_to_utc_milliseconds("2023-11-01 00:00")
 
     with open('regions.txt', 'r', encoding='utf-8') as file:
         regions = [line.strip() for line in file.readlines()]
