@@ -118,7 +118,7 @@ def check_spot_quota(region, boto3_session):
     for ec2_instance in ec2_instance_response['Reservations']:
         spot_duplicate_check = 0
         for spot_request in spot_request_response['SpotInstanceRequests']:
-            if not spot_request['InstanceId']:
+            if 'InstanceId' not in spot_request:
                 continue
             if spot_request['InstanceId'] == ec2_instance['Instances'][0]['InstanceId']:
                 spot_duplicate_check = 1
