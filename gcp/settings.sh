@@ -5,7 +5,7 @@ ARCH=$(uname -m)
 sudo apt-get update
 sudo apt-get install curl tar python3-pip -y
 
-pip3 install google-cloud-compute # pytz google-api-python-client
+pip3 install google-cloud-compute requests # pytz google-api-python-client
 
 if [[ $ARCH =~ (arm|aarch) ]]
 then

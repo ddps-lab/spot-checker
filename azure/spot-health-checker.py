@@ -1,24 +1,39 @@
+from azure.storage.blob import BlobServiceClient, BlobClient, ContainerClient
 from azure.identity import AzureCliCredential
 from azure.mgmt.compute import ComputeManagementClient
 from azure.mgmt.resource import ResourceManagementClient
 from azure.mgmt.network import NetworkManagementClient
 import argparse
+from conf import config
 from typing import Any, Dict, List
 import os
 from uuid import uuid4
 from datetime import datetime, timedelta
 import time
+import sys
+import requests
+
 from pathlib import Path
 
 PRINT_LOG = True
-SAVE_LOG_INTERVAL_SEC = 60 * 60
-
+SAVE_LOG_INTERVAL_SEC = 300
+UPLOAD_LOG_INTERVAL_SEC = 1800
 credential = AzureCliCredential()
 subscription_id = os.environ["AZURE_SUBSCRIPTION_ID"]
+nic_result = False
 
 resource_client = ResourceManagementClient(credential, subscription_id)
 network_client = NetworkManagementClient(credential, subscription_id)
 compute_client = ComputeManagementClient(credential, subscription_id)
+
+SLACK_URL = ""
+blob_container = ""
+
+
+# print to slack webhook
+def print(msg):
+    sys.stdout.write(f"{msg}\n")
+    requests.post(SLACK_URL, json={"text": f"{msg}"})
 
 
 class Logger:
@@ -33,11 +48,13 @@ class Logger:
         :param created_time: Creation time of instance
         :param path: Path to save logs (default: "./logs")
         """
+        self.connection_string = ""
         self.logs: List[Dict] = []
         self.keys: List[str] = []
         Path(path).mkdir(exist_ok=True)
         self.file_path = os.path.join(
             path, f"{instance_type}_{instance_zone}_{launch_time}.csv")
+        self.upload_path = f"{instance_type}_{instance_zone}_{launch_time}.csv"
         self.instance_type = instance_type
         self.instance_zone = instance_zone
         self.instance_name = instance_name
@@ -96,11 +113,22 @@ class Logger:
 
             with open(self.file_path, "a", encoding="utf-8") as f:
                 f.write("\n" + "\n".join(content))
-
             self.logs = []
             self.print_log("Save log successful")
         except Exception as e:
-            self.print_error("Save log failed")
+            self.print_error(f"Save log failed\n{e}")
+
+    def upload_log(self) -> None:
+        self.print_log("upload logs...")
+        try:
+            container_client = ContainerClient.from_connection_string(
+                self.connection_string, f"{blob_container}")
+            with open(self.file_path, "rb") as data:
+                container_client.upload_blob(
+                    self.upload_path, data=data, overwrite=True)
+            self.print_log("upload log successful")
+        except Exception as e:
+            self.print_error("upload log failed")
             print(e)
 
 
@@ -118,46 +146,49 @@ def get_status(group_name: str, name: str):
     vm_result = compute_client.virtual_machines.instance_view(group_name, name)
     if len(vm_result.statuses) < 2:
         return "Unknown"
-    return vm_result.statuses[1].display_status
+    return vm_result.statuses[1].display_status, vm_result.statuses[0].display_status
 
 
-def create_spot_instance(group_name: str, location: str, vm_size: str, name: str):
-    poller = network_client.virtual_networks.begin_create_or_update(group_name, f"VNET-{name}", {
-        "location": location,
-        "address_space": {
-            "address_prefixes": ["10.0.0.0/16"]
-        }
-    })
-    vnet_result = poller.result()
+def create_spot_instance(group_name: str, location: str, vm_size: str, name: str, image: str):
+    global nic_result
 
-    poller = network_client.subnets.begin_create_or_update(group_name, f"VNET-{name}", f"SUBNET-{name}", {
-        "address_prefix": "10.0.0.0/24"
-    })
-    subnet_result = poller.result()
-
-    poller = network_client.public_ip_addresses.begin_create_or_update(group_name, f"IP-{name}", {
-        "location": location,
-        "sku": {
-            "name": "Standard"
-        },
-        "public_ip_allocation_method": "Static",
-        "public_ip_address_version": "IPV4"
-    })
-    ip_address_result = poller.result()
-
-    poller = network_client.network_interfaces.begin_create_or_update(group_name, f"NIC-{name}", {
-        "location": location,
-        "ip_configurations": [{
-            "name": f"IPCONFIG-{name}",
-            "subnet": {
-                "id": subnet_result.id
-            },
-            "public_ip_address": {
-                "id": ip_address_result.id
+    if not nic_result:
+        poller = network_client.virtual_networks.begin_create_or_update(group_name, f"VNET-{name}", {
+            "location": location,
+            "address_space": {
+                "address_prefixes": ["10.0.0.0/16"]
             }
-        }]
-    })
-    nic_result = poller.result()
+        })
+        vnet_result = poller.result()
+
+        poller = network_client.subnets.begin_create_or_update(group_name, f"VNET-{name}", f"SUBNET-{name}", {
+            "address_prefix": "10.0.0.0/24"
+        })
+        subnet_result = poller.result()
+
+        poller = network_client.public_ip_addresses.begin_create_or_update(group_name, f"IP-{name}", {
+            "location": location,
+            "sku": {
+                "name": "Standard"
+            },
+            "public_ip_allocation_method": "Static",
+            "public_ip_address_version": "IPV4"
+        })
+        ip_address_result = poller.result()
+
+        poller = network_client.network_interfaces.begin_create_or_update(group_name, f"NIC-{name}", {
+            "location": location,
+            "ip_configurations": [{
+                "name": f"IPCONFIG-{name}",
+                "subnet": {
+                    "id": subnet_result.id
+                },
+                "public_ip_address": {
+                    "id": ip_address_result.id
+                }
+            }]
+        })
+        nic_result = poller.result()
 
     poller = compute_client.virtual_machines.begin_create_or_update(group_name, name, {
         "location": location,
@@ -165,7 +196,7 @@ def create_spot_instance(group_name: str, location: str, vm_size: str, name: str
             "image_reference": {
                 "publisher": "Canonical",
                 "offer": "UbuntuServer",
-                "sku": "18.04-LTS",
+                "sku": f"{image}",
                 "version": "latest"
             }
         },
@@ -216,31 +247,57 @@ hours = args.time_hours
 minutes = args.time_minutes
 
 group_name = f"{instance_zone}_{instance_type}_{instance_name}"
+local_path = f"./logs/{instance_type}_{instance_zone}_{launch_time}.csv"
 
 print(
     f"""Instance Name: {instance_name}\nInstance Type: {instance_type}\nInstance Zone: {instance_zone}\nGroup Name: {group_name}""")
 
-create_group(group_name, instance_zone)
-
-logger.print_log("Creating instance...")
 try:
-    create_spot_instance(group_name, instance_zone,
-                         instance_type, instance_name)
-except:
-    logger.print_error("Creating instance failed")
-    logger.print_log("Deleting group...")
-    delete_group(group_name)
+    create_group(group_name, instance_zone)
+except Exception as e:
+    logger.print_error(f"Creating group failed\n{e}")
     raise
 
+logger.print_log("Creating instance...")
 created_time = datetime.utcnow()
-logger.append({"time": created_time, "status": "CREATED"})
-logger.print_log("Create successful")
-
 
 stop_time = datetime.utcnow() + timedelta(hours=hours, minutes=minutes)
 status_old = None
-next_log_time = datetime.utcnow() + timedelta(seconds=5)
+next_log_time = datetime.utcnow() + timedelta(seconds=3)
 next_save_time = datetime.utcnow() + timedelta(seconds=SAVE_LOG_INTERVAL_SEC)
+next_upload_time = datetime.utcnow() + timedelta(seconds=UPLOAD_LOG_INTERVAL_SEC)
+
+while True:
+    try:
+        if instance_type in config['arm64_vm']:
+            start_status = create_spot_instance(group_name, instance_zone,
+                                                instance_type, instance_name, "18_04-lts-arm64")
+        elif instance_type in config['gen1_only_vm']:
+            start_status = create_spot_instance(group_name, instance_zone,
+                                                instance_type, instance_name, "18.04-LTS")
+        else:
+            start_status = create_spot_instance(group_name, instance_zone,
+                                                instance_type, instance_name, "18_04-lts-gen2")
+        break
+    except Exception as e:
+        if not "SkuNotAvailable" in str(e) or datetime.utcnow().timestamp() - launch_time.timestamp() > 60 * 60 * 24:
+            logger.print_error(f"Creating instance failed\n{e}")
+            logger.append({"time": datetime.utcnow(), "status": f"Creating instance failed\n{e}"})
+            logger.save_log()
+            logger.upload_log()
+            logger.print_log("Deleting group...")
+            delete_group(group_name)
+            raise
+        logger.print_error(f"SkuNotAvailable")
+        logger.append({"time": datetime.utcnow(), "status": "SkuNotAvailable"})
+        logger.save_log()
+        time.sleep(60)
+
+start_time = datetime.utcnow()
+logger.append({"time": start_time, "status": "CREATED"})
+logger.print_log("Create successful")
+
+
 
 try:
     while True:
@@ -250,10 +307,14 @@ try:
         if datetime.utcnow() >= next_save_time:
             logger.save_log()
             next_save_time += timedelta(seconds=SAVE_LOG_INTERVAL_SEC)
+        if datetime.utcnow() >= next_upload_time:
+            logger.upload_log()
+            next_upload_time += timedelta(seconds=UPLOAD_LOG_INTERVAL_SEC)
         try:
-            status = get_status(group_name, instance_name)
+            status, flag = get_status(group_name, instance_name)
 
-            logger.append({"time": datetime.utcnow(), "status": status})
+            logger.append({"time": datetime.utcnow(),
+                          "status": status+" "+flag})
 
             if status != status_old:
                 logger.print_log(f"Status Changed - {status}")
@@ -267,28 +328,27 @@ try:
                 except KeyboardInterrupt:
                     raise
                 except Exception as e:
-                    logger.print_error("Restart failed")
-                    print(e)
+                    logger.print_error(f"Restart failed\n{e}")
         except KeyboardInterrupt:
             raise
         except Exception as e:
-            logger.print_error("Unknown Error")
-            print(e)
+            logger.print_error(f"Unknown Error\n{e}")
 
         if datetime.utcnow() >= next_log_time:
-            next_log_time = datetime.utcnow() + timedelta(seconds=5)
+            next_log_time = datetime.utcnow() + timedelta(seconds=3)
         else:
             time.sleep((next_log_time - datetime.utcnow()).total_seconds())
-            next_log_time += timedelta(seconds=5)
+            next_log_time += timedelta(seconds=3)
 
 except KeyboardInterrupt:
     logger.print_error("KeyboardInterrupt raised. Shutting down gracefully...")
 
 logger.save_log()
+logger.upload_log()
 
 try:
     logger.print_log("Deleting instance...")
     delete_group(group_name)
     logger.print_log("Delete successful")
-except:
-    logger.print_error("Delete failed")
+except Exception as e:
+    logger.print_error(f"Delete failed\n{e}")
