@@ -63,10 +63,17 @@ create_request_response = ec2.request_spot_instances(
     InstanceCount=1,
     LaunchSpecification=launch_spec,
 #     SpotPrice=spot_price, # default value for on-demand price
+    TagSpecifications=[
+            {
+                'ResourceType': 'spot-instances-request',
+                'Tags': [{'Key': 'Name', 'Value': 'spot-checker'}]
+            }
+        ],
     ValidFrom=launch_time,
     ValidUntil=stop_time,
     Type='persistent' # not 'one-time', persistent request
 )
+
 spot_data_dict['create_request'] = create_request_response
 request_id = create_request_response['SpotInstanceRequests'][0]['SpotInstanceRequestId']
 time.sleep(1)
