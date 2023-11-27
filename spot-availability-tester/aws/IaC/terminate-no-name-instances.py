@@ -9,6 +9,7 @@ LOG_STREAM_NAME = os.environ['LOG_STREAM_NAME']
 ec2 = boto3.client('ec2')
 logs_client = boto3.client('logs')
 
+
 def create_log_event(result):
     log_event = {
         'timestamp': int(time.time() * 1000),
@@ -17,18 +18,24 @@ def create_log_event(result):
     logs_client.put_log_events(
         logGroupName=LOG_GROUP_NAME, logStreamName=LOG_STREAM_NAME, logEvents=[log_event])
 
+
 def lambda_handler(event, context):
     # Get list of instances
-    response = ec2.describe_instances()
-    
+    response = ec2.describe_instances(Filters=[{'Name': 'instance-lifecycle', 'Values': ['spot']}])
+
+    # return when no response
+    if not response['Reservations']:
+        return
+
     # Find instances without a Name tag
     instances_logs = []
+    instances_list = []
     instances_to_terminate = []
     for reservation in response['Reservations']:
         for instance in reservation['Instances']:
             name_tags = [tag['Value'] for tag in instance.get('Tags', []) if tag['Key'] == 'Name']
             if ((not name_tags or not name_tags[0]) and instance['State']['Name'] != "terminated" and instance['State']['Name'] != "shutting-down"):
-                instances_to_terminate.append(instance['InstanceId'])
+                instances_list.append(instance['InstanceId'])
                 launch_time = (instance['LaunchTime']).timestamp()
                 terminate_time = time.time()
                 tmp_data = {
@@ -41,6 +48,17 @@ def lambda_handler(event, context):
                     "AvailabilityZone": instance['Placement']['AvailabilityZone'],
                 }
                 instances_logs.append(tmp_data)
+
+    instance_details = ec2.describe_instances(
+        InstanceIds=instances_list
+    )
+
+    for instance in instance_details['Reservations']:
+        spot_instance_request_id = instance['Instances'][0]['SpotInstanceRequestId']
+        spot_request_details = ec2.describe_spot_instance_requests(SpotInstanceRequestIds=[spot_instance_request_id])
+        tag = spot_request_details['SpotInstanceRequests'][0]['Tags'][0]['Value']
+        if tag == 'spot-ddd':
+            instances_to_terminate.append(instance['Instances'][0]['InstanceId'])
 
     # Terminate instances without a Name tag
     if instances_to_terminate:
