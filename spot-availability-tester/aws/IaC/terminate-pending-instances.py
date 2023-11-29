@@ -5,10 +5,10 @@ import json
 
 LOG_GROUP_NAME = os.environ['LOG_GROUP_NAME']
 LOG_STREAM_NAME = os.environ['LOG_STREAM_NAME']
+VPC_ID = os.environ['VPC_ID']
 
 ec2 = boto3.client('ec2')
 logs_client = boto3.client('logs')
-
 
 def create_log_event(result):
     log_event = {
@@ -18,24 +18,19 @@ def create_log_event(result):
     logs_client.put_log_events(
         logGroupName=LOG_GROUP_NAME, logStreamName=LOG_STREAM_NAME, logEvents=[log_event])
 
-
 def lambda_handler(event, context):
     instances_to_terminate = []
     instances_to_terminate.append(event['detail']['instance-id'])
-
-    instance_details = ec2.describe_instances(
-        InstanceIds=instances_to_terminate,
-        Filters=[{'Name': 'instance-lifecycle', 'Values': ['spot']}]
+    response = ec2.describe_instances(
+        Filters=[{'Name': 'instance-lifecycle', 'Values': ['spot']}],
+        InstanceIds=instances_to_terminate
     )
 
-    if not instance_details['Reservations']:
+    if not response['Reservations']:
         return
 
-    spot_instance_request_id = instance_details['Reservations'][0]['Instances'][0]['SpotInstanceRequestId']
-    spot_request_details = ec2.describe_spot_instance_requests(SpotInstanceRequestIds=[spot_instance_request_id])
-    tag = spot_request_details['SpotInstanceRequests'][0]['Tags'][0]['Value']
-
-    if tag == 'spot-ddd':
+    instances_to_terminate_vpc = response['Reservations'][0]['Instances'][0]['VpcId']
+    if instances_to_terminate_vpc == VPC_ID:
         log_data = {
             "Timestamp": time.time(),
             "InstanceId": event['detail']['instance-id'],
@@ -46,4 +41,3 @@ def lambda_handler(event, context):
 
         ec2.terminate_instances(InstanceIds=instances_to_terminate)
         print(f"Terminated instances: {event['detail']['instance-id']}")
-

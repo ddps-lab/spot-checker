@@ -3,6 +3,12 @@ resource "aws_cloudwatch_log_group" "lambda-cloudwatch-log-group" {
   retention_in_days = 30
 }
 
+locals {
+  subnet_ids = jsonencode(var.vpc_id)
+}
+
+
+
 resource "aws_lambda_function" "lambda" {
   function_name = "${var.prefix}-terminate-pending-instances"
   architectures = ["x86_64"]
@@ -16,7 +22,8 @@ resource "aws_lambda_function" "lambda" {
   environment {
     variables = {
       LOG_GROUP_NAME    = var.log_group_name,
-      LOG_STREAM_NAME   = var.log_stream_name
+      LOG_STREAM_NAME   = var.log_stream_name,
+      VPC_ID            = var.vpc_id,
     }
   }
 }
