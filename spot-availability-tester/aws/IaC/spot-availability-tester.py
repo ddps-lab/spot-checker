@@ -72,12 +72,6 @@ def test_spot_instance_available(instance_type, availability_zone):
             },
             'UserData': user_data_encoded
         },
-        TagSpecifications=[
-            {
-                'ResourceType': 'spot-instances-request',
-                'Tags': [{'Key': 'Name', 'Value': 'spot-ddd'}]
-            }
-        ]
     )
 
     create_time = spot_request['SpotInstanceRequests'][0]['CreateTime']
