@@ -2,12 +2,14 @@ import boto3
 import os
 import time
 import json
+import base64
 
 ec2 = boto3.client('ec2')
 logs_client = boto3.client('logs')
 
-ARM_INSTANCE_TYPES = ['a1', 't4g', 'c7g', 'c7gn', 'c6g', 'c6gd', 'c6gn', 'im4gn', 'is4gen', 'm7g', 'm6g', 'm6gd', 'r7g', 'r6g', 'r6gd', 'x2gd']
-ARM_INSTANCE_PREFIX = ['g','gn','gd','gen']
+ARM_INSTANCE_TYPES = ['a1', 't4g', 'c7g', 'c7gn', 'c6g', 'c6gd', 'c6gn', 'im4gn', 'is4gen', 'm7g', 'm6g', 'm6gd', 'r7g',
+                      'r6g', 'r6gd', 'x2gd']
+ARM_INSTANCE_PREFIX = ['g', 'gn', 'gd', 'gen']
 
 X86_AMI_ID = os.environ['X86_AMI_ID']
 ARM_AMI_ID = os.environ['ARM_AMI_ID']
@@ -53,6 +55,10 @@ def test_spot_instance_available(instance_type, availability_zone):
 
     print(f"Instance Type: {instance_type}, Architecture: {architecture}")
 
+    user_data = """#!/bin/bash
+    shutdown -h now"""
+    user_data_encoded = base64.b64encode(user_data.encode()).decode()
+
     spot_request = ec2.request_spot_instances(
         InstanceCount=1,
         Type='one-time',
@@ -63,9 +69,11 @@ def test_spot_instance_available(instance_type, availability_zone):
             'SecurityGroupIds': SECURITY_GROUP_IDS,
             'Placement': {
                 "AvailabilityZone": availability_zone
-            }
-        }
+            },
+            'UserData': user_data_encoded
+        },
     )
+
     create_time = spot_request['SpotInstanceRequests'][0]['CreateTime']
     spot_request_id = spot_request['SpotInstanceRequests'][0]['SpotInstanceRequestId']
     global code
@@ -78,7 +86,7 @@ def test_spot_instance_available(instance_type, availability_zone):
                     SpotInstanceRequestIds=[spot_request_id])
                 break
             except:
-                time.sleep(1)
+                time.sleep(0.1)
                 print("retry describe")
         print("finish describe")
         request = response['SpotInstanceRequests'][0]
@@ -86,13 +94,14 @@ def test_spot_instance_available(instance_type, availability_zone):
             code = "fail"
             if request['Status']['Code'] == "bad-parameters":
                 print("bad-parameters!")
-                print(f"Availability zone: {availability_zone}, Subnet ID: {SUBNET_IDS[ord(availability_zone[-1]) - ord('a')]}, Instance Type: {instance_type}")
+                print(
+                    f"Availability zone: {availability_zone}, Subnet ID: {SUBNET_IDS[ord(availability_zone[-1]) - ord('a')]}, Instance Type: {instance_type}")
             break
         elif request['Status']['Code'] in SUCCESS_CODE:
             code = "success"
             break
         else:
-            time.sleep(1)
+            time.sleep(0.1)
 
     status_update_time = response['SpotInstanceRequests'][0]['Status']['UpdateTime']
     cancel_spot_request = ec2.cancel_spot_instance_requests(
