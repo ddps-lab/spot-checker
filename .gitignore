@@ -23,6 +23,7 @@
 **/variables.sh
 **/*variables.py
 **/regions.txt
+**/awskeys.py
 
 ### Terraform .gitignore
 # Local .terraform directories
