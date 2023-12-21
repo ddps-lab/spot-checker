@@ -5,6 +5,7 @@
 **/terminate-no-name-instances.zip
 **/terminate-pending-instances.zip
 **/spot-availability-tester.zip
+**/quota-availability-updater.zip
 
 ### Credentials
 **/sheet_credential.json
