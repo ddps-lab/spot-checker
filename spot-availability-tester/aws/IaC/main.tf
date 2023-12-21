@@ -36,3 +36,21 @@ module "spot-availability-tester" {
   log_stream_name = var.spot_log_stream_name
   lambda_rate = var.lambda_rate
 }
+
+module "quota-availability-updater" {
+  source = "./quota-availability-updater"
+  prefix = var.prefix
+  lambda_role_arn = aws_iam_role.quota-availability-updater-lambda-role.arn
+  region = var.region
+}
+
+resource "aws_dynamodb_table" "DDDCHECKTABLE" {
+  name           = "${var.prefix}-DDDCHECKTABLE"
+  billing_mode   = "PAY_PER_REQUEST"
+  hash_key       = "TABLE"
+
+  attribute {
+    name = "TABLE"
+    type = "N"  # string
+  }
+}
