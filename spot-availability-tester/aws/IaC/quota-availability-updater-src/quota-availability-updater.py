@@ -7,6 +7,8 @@ import pickle
 REGION = os.environ['REGION']
 DDBNAME = os.environ['DDBNAME']
 
+session = boto3.Session()
+
 with open('./all_vcpu_info.pkl', 'rb') as f:
     ALL_VCPU_INFO = pickle.load(f)
 with open('./all_vcpu_quota_info.pkl', 'rb') as f:
@@ -149,16 +151,15 @@ def update_dynamodb_table(session, table_name, updatedict):
     )
 
 def lambda_handler(event, context):
-    session = boto3.Session()
     quota_result = check_spot_quota(REGION, session)
     print("quota result : ", quota_result)
 
     newDict = dict()
     for stype, percent in quota_result["region_vCPU_Percent"].items():
-        # if percent >= 80:
-        #     newDict[stype]=False
-        if percent != 0:
+        if percent >= 80:
             newDict[stype]=False
+        # if percent != 0:
+        #     newDict[stype]=False
         else:
             newDict[stype]=True
     
