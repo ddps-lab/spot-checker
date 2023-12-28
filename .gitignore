@@ -5,6 +5,7 @@
 **/terminate-no-name-instances.zip
 **/terminate-pending-instances.zip
 **/spot-availability-tester.zip
+**/quota-availability-updater.zip
 
 ### Credentials
 **/sheet_credential.json
@@ -23,6 +24,7 @@
 **/variables.sh
 **/*variables.py
 **/regions.txt
+**/awskeys.py
 
 ### Terraform .gitignore
 # Local .terraform directories
