@@ -56,7 +56,7 @@ def check_throttling(instance_type):
     elif instance_type[:1] == 'x':
         instance_category = "X"
     else:
-        instance_category = "STANDRAD"
+        instance_category = "STANDARD"
     response = dynamodb.get_item(TableName=f"{PREFIX}-DDDCHECKTABLE", Key={'TABLE':{'N':'1'}})['Item'][instance_category]['BOOL']
     return response
 
