@@ -27,7 +27,8 @@ resource "aws_lambda_function" "lambda" {
       SUBNET_AZ_NAMES        = local.subnet_az_names,
       SECURITY_GROUP_ID = var.security_group_id,
       LOG_GROUP_NAME    = var.log_group_name,
-      LOG_STREAM_NAME   = var.log_stream_name
+      LOG_STREAM_NAME   = var.log_stream_name,
+      PREFIX = var.prefix
     }
   }
 }

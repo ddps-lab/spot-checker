@@ -6,6 +6,7 @@ import base64
 
 ec2 = boto3.client('ec2')
 logs_client = boto3.client('logs')
+dynamodb = boto3.client('dynamodb')
 
 ARM_INSTANCE_TYPES = ['a1', 't4g', 'c7g', 'c7gn', 'c6g', 'c6gd', 'c6gn', 'im4gn', 'is4gen', 'm7g', 'm6g', 'm6gd', 'r7g',
                       'r6g', 'r6gd', 'x2gd']
@@ -19,6 +20,7 @@ SUBNET_AZ_NAMES = json.loads(os.environ['SUBNET_AZ_NAMES'])
 SECURITY_GROUP_IDS = [os.environ['SECURITY_GROUP_ID']]
 LOG_GROUP_NAME = os.environ['LOG_GROUP_NAME']
 LOG_STREAM_NAME = os.environ['LOG_STREAM_NAME']
+PREFIX = os.environ['PREFIX']
 FAILED_CODES = ["capacity-not-available",
                 "price-too-low",
                 "not-scheduled-yet",
@@ -29,6 +31,34 @@ FAILED_CODES = ["capacity-not-available",
                 "bad-parameters"]
 SUCCESS_CODE = ["pending-fulfillment",
                 "fulfilled"]
+
+
+
+def check_throttling(instance_type):
+    instance_type  = instance_type.split('.')[0]
+    if instance_type[:3] == 'trn':
+        instance_category = "TRN"
+    elif instance_type[:3] == 'inf':
+        instance_category = "INF"
+    elif instance_type[:2] == 'dl':
+        instance_category = "DL"
+    elif instance_type[:2] == 'vt':
+        instance_category = "G_VT"
+    elif instance_type[:1] == 'g':
+        instance_category = "G_VT"
+    elif instance_type[:1] == 'p':
+        if instance_type[1] == '5':
+            instance_category = "P5"
+        else:
+            instance_category = "P2_P3_P4"
+    elif instance_type[:1] == 'f':
+        instance_category = "F"
+    elif instance_type[:1] == 'x':
+        instance_category = "X"
+    else:
+        instance_category = "STANDARD"
+    response = dynamodb.get_item(TableName=f"{PREFIX}-DDDCHECKTABLE", Key={'TABLE':{'N':'1'}})['Item'][instance_category]['BOOL']
+    return response
 
 
 def create_log_event(result):
@@ -121,6 +151,8 @@ def test_spot_instance_available(instance_type, availability_zone):
 
 
 def lambda_handler(event, context):
+    if not check_throttling(event['instance_type']):
+        return "throttling"
     result = test_spot_instance_available(event['instance_type'], event['availability_zone'])
     create_log_event(json.dumps(result))
     return "finish"

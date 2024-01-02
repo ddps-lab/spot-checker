@@ -25,6 +25,11 @@ resource "aws_iam_role_policy_attachment" "spot-availability-tester-lambda_EC2_p
   policy_arn = "arn:aws:iam::aws:policy/AmazonEC2FullAccess"
 }
 
+resource "aws_iam_role_policy_attachment" "spot-availability-tester-lambda_DynamoDB_policy" {
+  role       = aws_iam_role.spot-availability-tester-lambda-role.name
+  policy_arn = "arn:aws:iam::aws:policy/AmazonDynamoDBFullAccess"
+}
+
 resource "aws_iam_role" "terminate-no-name-instance-lambda-role" {
   name = "${var.prefix}-terminate-no-name-instances-${var.region}-role"
 

@@ -156,10 +156,8 @@ def lambda_handler(event, context):
 
     newDict = dict()
     for stype, percent in quota_result["region_vCPU_Percent"].items():
-        if percent >= 80:
+        if percent >= 0.8:
             newDict[stype]=False
-        # if percent != 0:
-        #     newDict[stype]=False
         else:
             newDict[stype]=True
     

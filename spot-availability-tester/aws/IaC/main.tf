@@ -9,6 +9,7 @@ module "vpc" {
 module "terminate-no-name-instances" {
   source = "./terminate-no-name-instance"
   prefix = var.prefix
+  vpc_id = module.vpc.vpc_id
   lambda_role_arn = aws_iam_role.terminate-no-name-instance-lambda-role.arn
   log_group_name = var.log_group_name
   log_stream_name = var.terminate_log_stream_name
@@ -17,6 +18,7 @@ module "terminate-no-name-instances" {
 module "terminate-pending-instances" {
   source = "./terminate-pending-instance"
   prefix = var.prefix
+  vpc_id = module.vpc.vpc_id
   lambda_role_arn = aws_iam_role.terminate-pending-instance-lambda-role.arn
   log_group_name = var.log_group_name
   log_stream_name = var.pending_log_stream_name
