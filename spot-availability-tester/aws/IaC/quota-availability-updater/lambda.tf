@@ -3,7 +3,7 @@ resource "aws_cloudwatch_log_group" "lambda-cloudwatch-log-group" {
   retention_in_days = 30
 }
 resource "aws_lambda_function" "lambda" {
-  function_name = "${var.prefix}-quota-availability-checker"
+  function_name = "${var.prefix}-quota-availability-updater"
   architectures = ["x86_64"]
   memory_size   = 128
   timeout       = 30
