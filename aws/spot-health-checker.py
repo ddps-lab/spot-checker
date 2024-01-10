@@ -5,11 +5,11 @@ import pickle
 import datetime
 import argparse
 from pathlib import Path
-
+import multiprocessing
 
 ### Spot Checker Mapping Data
-region_ami = pickle.load(open('./data/region_ami_dict.pkl', 'rb')) # {x86/arm: {region: (ami-id, ami-info), ...}}
-az_map_dict = pickle.load(open('./data/az_map_dict.pkl', 'rb')) # {(region, az-id): az-name, ...}
+region_ami = pickle.load(open('./data/region_ami_dict.pkl', 'rb'))  # {x86/arm: {region: (ami-id, ami-info), ...}}
+az_map_dict = pickle.load(open('./data/az_map_dict.pkl', 'rb'))  # {(region, az-id): az-name, ...}
 arm64_family = ['a1', 't4g', 'c6g', 'c6gd', 'c6gn', 'im4gn', 'is4gen', 'm6g', 'm6gd', 'r6g', 'r6gd', 'x2gd']
 LOG_BUCKET_NAME = 'spot-checker-data'
 
@@ -18,11 +18,11 @@ parser = argparse.ArgumentParser(description='Spot Checker Workload Information'
 parser.add_argument('--instance_type', type=str, default='t2.large')
 parser.add_argument('--region', type=str, default='ap-southeast-2')
 parser.add_argument('--az_id', type=str, default='apse2-az2')
+parser.add_argument('--instance_count', type=int, default='1', help='Number of instances to create')
 parser.add_argument('--wait_minutes', type=int, default='1', help='wait before request, minutes')
-parser.add_argument('--time_minutes', type=int, default='5', help='how long check spot instance, minutes')
+parser.add_argument('--time_minutes', type=int, default='10', help='how long check spot instance, minutes')
 parser.add_argument('--time_hours', type=int, default='0', help='how long check spot instance, hours')
 args = parser.parse_args()
-
 
 ### Spot Checker Arguments Parsing
 instance_type = args.instance_type
@@ -34,10 +34,10 @@ az_name = az_map_dict[(region, az_id)]
 ami_id = region_ami[instance_arch][region][0]
 launch_time = datetime.datetime.now() + datetime.timedelta(minutes=args.wait_minutes)
 launch_time = launch_time.astimezone(pytz.UTC)
-stop_time = datetime.datetime.now() + datetime.timedelta(hours=args.time_hours, minutes=(args.time_minutes + args.wait_minutes))
+stop_time = datetime.datetime.now() + datetime.timedelta(hours=args.time_hours,
+                                                         minutes=(args.time_minutes + args.wait_minutes))
 stop_time = stop_time.astimezone(pytz.UTC)
 spot_data_dict = {}
-
 
 ### Spot Launch Specifications
 launch_spec = {
@@ -53,29 +53,28 @@ spot_data_dict['launch_info'] = launch_info
 spot_data_dict['start_time'] = launch_time
 spot_data_dict['end_time'] = stop_time
 
-
-### Start Spot Checker
+### session&client
 session = boto3.session.Session(profile_name='default')
 ec2 = session.client('ec2', region_name=region)
-s3 = session.resource('s3')
-
-create_request_response = ec2.request_spot_instances(
-    InstanceCount=1,
-    LaunchSpecification=launch_spec,
-#     SpotPrice=spot_price, # default value for on-demand price
-    ValidFrom=launch_time,
-    ValidUntil=stop_time,
-    Type='persistent' # not 'one-time', persistent request
-)
-
-spot_data_dict['create_request'] = create_request_response
-request_id = create_request_response['SpotInstanceRequests'][0]['SpotInstanceRequestId']
-time.sleep(1)
 
 
-### Status Log Variables
-log_list = []
-instance_tag = False
+### Start Spot Checker
+def start_spot_checker(target_count):
+    create_request_response = ec2.request_spot_instances(
+        InstanceCount=target_count,
+        LaunchSpecification=launch_spec,
+        #     SpotPrice=spot_price, # default value for on-demand price
+        ValidFrom=launch_time,
+        ValidUntil=stop_time,
+        Type='persistent'  # not 'one-time', persistent request
+    )
+    siri_list = []
+    for rq in create_request_response['SpotInstanceRequests']:
+        siri_list.append(rq['SpotInstanceRequestId'])
+
+    spot_data_dict['create_requests'] = create_request_response
+    time.sleep(1)
+    return siri_list
 
 
 ### Log Parser
@@ -88,7 +87,7 @@ def log_sampling(current_time, request_describe, instance_describe):
                 request_state = request_describe['SpotInstanceRequests'][0]['State']
             if 'Status' in request_describe['SpotInstanceRequests'][0]:
                 request_status = request_describe['SpotInstanceRequests'][0]['Status']
-    
+
     instance_id = 'error'
     instance_state = 'error'
     instance_status = 'error'
@@ -100,92 +99,97 @@ def log_sampling(current_time, request_describe, instance_describe):
                 instance_state = instance_describe['InstanceStatuses'][0]['InstanceState']
             if 'InstanceStatus' in instance_describe['InstanceStatuses'][0]:
                 instance_status = instance_describe['InstanceStatuses'][0]['InstanceStatus']
-    
+
     return (current_time, request_state, request_status, instance_id, instance_state, instance_status)
-    
-    
-### First Log
-current_time = datetime.datetime.now()
-current_time = current_time.astimezone(pytz.UTC)
-request_describe = ec2.describe_spot_instance_requests(SpotInstanceRequestIds=[request_id])
-request_status = request_describe['SpotInstanceRequests'][0]['Status']['Code']
-instance_describe = ''
-instance_id = 'checker'
-sample_log = log_sampling(current_time, request_describe, instance_describe)
-log_list.append(sample_log)
 
 
-### Loop Log
-save_idx = 0
-while True:
+def logging(request_id):
+    ### Status Log Variables
+    log_list = []
+    instance_tag = False
+    ### First Log
     current_time = datetime.datetime.now()
     current_time = current_time.astimezone(pytz.UTC)
-    try:
-        request_describe = ec2.describe_spot_instance_requests(SpotInstanceRequestIds=[request_id])
-        request_status = request_describe['SpotInstanceRequests'][0]['Status']['Code']
-        sample_log = log_sampling(current_time, request_describe, instance_describe)
-        log_list.append(sample_log)
-    except Exception as e:
-        print(e)
-        log_list.append(current_time, 'loop-error', 'loop-error')
-    
-    if request_status == 'fulfilled':
-        instance_id = request_describe['SpotInstanceRequests'][0]['InstanceId']
-        if instance_tag == False:
-            instance_tag = True
-            ec2.create_tags(Resources=[instance_id], Tags=[{'Key':'Name', 'Value':'spot-checker-target'}])
-            print(f"{instance_type}-{az_id}-{instance_id} fulfilled")
-        
-        instance_describe = ec2.describe_instance_status(InstanceIds=[instance_id])
-        instance_status = instance_describe['InstanceStatuses']
-        
-    if request_status == 'capacity-not-available':
-        if instance_tag == True:
-            instance_tag = False
-            
-    if current_time > stop_time:
-        print(f"{instance_type}-{az_id}-{instance_id} stopped")
-        
-        if instance_id == 'checker':
-            current_time = datetime.datetime.now()
-            current_time = current_time.astimezone(pytz.UTC)
+    request_describe = ec2.describe_spot_instance_requests(SpotInstanceRequestIds=[request_id])
+    request_status = request_describe['SpotInstanceRequests'][0]['Status']['Code']
+    instance_describe = ''
+    instance_id = 'checker'
+    sample_log = log_sampling(current_time, request_describe, instance_describe)
+    log_list.append(sample_log)
+
+    ### Loop Log
+    save_idx = 0
+    while True:
+        current_time = datetime.datetime.now()
+        current_time = current_time.astimezone(pytz.UTC)
+        try:
             request_describe = ec2.describe_spot_instance_requests(SpotInstanceRequestIds=[request_id])
+            request_status = request_describe['SpotInstanceRequests'][0]['Status']['Code']
             sample_log = log_sampling(current_time, request_describe, instance_describe)
             log_list.append(sample_log)
-            
-        elif (request_status == 'fulfilled') or (request_status == 'request-canceled-and-instance-running'):
-            print(f"{instance_type}-{az_id}-{instance_id} terminated")
-            terminate_response = ec2.terminate_instances(InstanceIds=[instance_id])
-            spot_data_dict['terminate_response'] = terminate_response
-            
-            current_time = datetime.datetime.now()
-            current_time = current_time.astimezone(pytz.UTC)
-            request_describe = ec2.describe_spot_instance_requests(SpotInstanceRequestIds=[request_id])
+        except Exception as e:
+            print(e)
+            log_list.append(current_time, 'loop-error', 'loop-error')
+
+        if request_status == 'fulfilled':
+            instance_id = request_describe['SpotInstanceRequests'][0]['InstanceId']
+            if instance_tag == False:
+                instance_tag = True
+                ec2.create_tags(Resources=[instance_id], Tags=[{'Key': 'Name', 'Value': 'spot-checker-target'}])
+                print(f"{instance_type}-{az_id}-{instance_id} fulfilled")
+
             instance_describe = ec2.describe_instance_status(InstanceIds=[instance_id])
-            sample_log = log_sampling(current_time, request_describe, instance_describe)
-            log_list.append(sample_log)
-            
-        else:
-            print(f"{instance_type}-{az_id}-{instance_id} error")
-        break
-    time.sleep(5)
-    save_idx += 1
-    if (save_idx != 0) and (save_idx % 720 == 0):
-        # Save log to Local
-        spot_data_dict['logs'] = log_list
-        filename = f"logs/{instance_type}_{region}_{az_id}_{launch_time}.pkl"
-        print(f"save log of {filename}")
-        Path('./logs').mkdir(exist_ok=True)
-        pickle.dump(spot_data_dict, open(filename, 'wb'))
+            instance_status = instance_describe['InstanceStatuses']
 
-# Save log to Local
-spot_data_dict['logs'] = log_list
-filename = f"logs/{instance_type}_{region}_{az_id}_{launch_time}.pkl"
-print(f"save final log of {filename}")
-Path('./logs').mkdir(exist_ok=True)
-pickle.dump(spot_data_dict, open(filename, 'wb'))
+        if request_status == 'capacity-not-available':
+            if instance_tag == True:
+                instance_tag = False
 
-# Upload log to S3
-spot_data_dict_obj = pickle.dumps(spot_data_dict)
-s3.Object(LOG_BUCKET_NAME, filename).put(Body=spot_data_dict_obj)
-print(f"upload log of {filename} done")
+        if current_time > stop_time:
+            print(f"{instance_type}-{az_id}-{instance_id} stopped")
+
+            if instance_id == 'checker':
+                current_time = datetime.datetime.now()
+                current_time = current_time.astimezone(pytz.UTC)
+                request_describe = ec2.describe_spot_instance_requests(SpotInstanceRequestIds=[request_id])
+                sample_log = log_sampling(current_time, request_describe, instance_describe)
+                log_list.append(sample_log)
+
+            elif (request_status == 'fulfilled') or (request_status == 'request-canceled-and-instance-running'):
+                print(f"{instance_type}-{az_id}-{instance_id} terminated")
+                terminate_response = ec2.terminate_instances(InstanceIds=[instance_id])
+                spot_data_dict['terminate_response'] = terminate_response
+
+                current_time = datetime.datetime.now()
+                current_time = current_time.astimezone(pytz.UTC)
+                request_describe = ec2.describe_spot_instance_requests(SpotInstanceRequestIds=[request_id])
+                instance_describe = ec2.describe_instance_status(InstanceIds=[instance_id])
+                sample_log = log_sampling(current_time, request_describe, instance_describe)
+                log_list.append(sample_log)
+
+            else:
+                print(f"{instance_type}-{az_id}-{instance_id} error")
+            break
+        time.sleep(5)
+        save_idx += 1
+        if (save_idx != 0) and (save_idx % 720 == 0):
+            # Save log to Local
+            spot_data_dict['logs'] = log_list
+            filename = f"logs/{instance_type}_{region}_{az_id}_{launch_time}_{instance_id}.pkl"
+            print(f"save log of {filename}")
+            Path('./logs').mkdir(exist_ok=True)
+            pickle.dump(spot_data_dict, open(filename, 'wb'))
+
+    # Save log to Local
+    spot_data_dict['logs'] = log_list
+    filename = f"logs/{instance_type}_{region}_{az_id}_{launch_time}.pkl"
+    print(f"save final log of {filename}")
+    Path('./logs').mkdir(exist_ok=True)
+    pickle.dump(spot_data_dict, open(filename, 'wb'))
+
+
+if __name__ == "__main__":
+    instance_count = args.instance_count
+    siri_list = start_spot_checker(instance_count)
+    with multiprocessing.Pool(processes=instance_count) as pool:
+        pool.map(logging, siri_list)
