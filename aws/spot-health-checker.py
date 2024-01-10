@@ -3,6 +3,7 @@ import time
 import boto3
 import pickle
 import datetime
+import base64
 import argparse
 from pathlib import Path
 import multiprocessing
@@ -38,12 +39,23 @@ stop_time = datetime.datetime.now() + datetime.timedelta(hours=args.time_hours,
                                                          minutes=(args.time_minutes + args.wait_minutes))
 stop_time = stop_time.astimezone(pytz.UTC)
 spot_data_dict = {}
+userdata = f"""#!/bin/bash
+                CURRENT_TIME=$(date +"%Y-%m-%d_%H-%M-%S")
+                INSTANCE_ID=$(ec2-metadata -i | cut -d " " -f 2)
+                echo "Instance start time: $CURRENT_TIME" > ~/{instance_type}_{az_id}_$INSTANCE_ID.txt
+                aws s3 cp ~/{instance_type}_{az_id}_$INSTANCE_ID.txt s3://query-sps-change-targetcapacity/start_time/{instance_type}_{az_id}_$INSTANCE_ID.txt
+                """
+userdata_encoded = base64.b64encode(userdata.encode()).decode()
 
 ### Spot Launch Specifications
 launch_spec = {
     'ImageId': ami_id,
     'InstanceType': instance_type,
-    'Placement': {'AvailabilityZone': az_name}
+    'Placement': {'AvailabilityZone': az_name},
+    'IamInstanceProfile': {
+            'Arn': '' # IAM ARN for S3 access
+        },
+    'UserData': userdata_encoded,
 }
 launch_info = [instance_type, instance_family, instance_arch, region, az_id, az_name, ami_id]
 print(f"""Instance Type: {instance_type}\nInstance Family: {instance_family}\nInstance Arhictecture: {instance_arch}
@@ -60,6 +72,7 @@ ec2 = session.client('ec2', region_name=region)
 
 ### Start Spot Checker
 def start_spot_checker(target_count):
+
     create_request_response = ec2.request_spot_instances(
         InstanceCount=target_count,
         LaunchSpecification=launch_spec,
@@ -172,7 +185,7 @@ def logging(request_id):
             break
         time.sleep(5)
         save_idx += 1
-        if (save_idx != 0) and (save_idx % 720 == 0):
+        if (save_idx != 0) and (save_idx % 30 == 0):
             # Save log to Local
             spot_data_dict['logs'] = log_list
             filename = f"logs/{instance_type}_{region}_{az_id}_{launch_time}_{instance_id}.pkl"
@@ -182,11 +195,11 @@ def logging(request_id):
 
     # Save log to Local
     spot_data_dict['logs'] = log_list
-    filename = f"logs/{instance_type}_{region}_{az_id}_{launch_time}.pkl"
+    filename = f"logs/{instance_type}_{region}_{az_id}_{launch_time}_{instance_id}.pkl"
     print(f"save final log of {filename}")
     Path('./logs').mkdir(exist_ok=True)
     pickle.dump(spot_data_dict, open(filename, 'wb'))
-
+    print('log saved')
 
 if __name__ == "__main__":
     instance_count = args.instance_count
