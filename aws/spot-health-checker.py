@@ -35,8 +35,7 @@ az_name = az_map_dict[(region, az_id)]
 ami_id = region_ami[instance_arch][region][0]
 launch_time = datetime.datetime.now() + datetime.timedelta(minutes=args.wait_minutes)
 launch_time = launch_time.astimezone(pytz.UTC)
-stop_time = datetime.datetime.now() + datetime.timedelta(hours=args.time_hours,
-                                                         minutes=(args.time_minutes + args.wait_minutes))
+stop_time = datetime.datetime.now() + datetime.timedelta(hours=args.time_hours, minutes=(args.time_minutes + args.wait_minutes))
 stop_time = stop_time.astimezone(pytz.UTC)
 spot_data_dict = {}
 userdata = f"""#!/bin/bash
@@ -142,7 +141,7 @@ def logging(request_id):
             log_list.append(sample_log)
         except Exception as e:
             print(e)
-            log_list.append(current_time, 'loop-error', 'loop-error')
+            log_list.append([current_time, 'loop-error', 'loop-error'])
 
         if request_status == 'fulfilled':
             instance_id = request_describe['SpotInstanceRequests'][0]['InstanceId']
