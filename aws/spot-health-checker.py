@@ -12,7 +12,7 @@ import multiprocessing
 region_ami = pickle.load(open('./data/region_ami_dict.pkl', 'rb'))  # {x86/arm: {region: (ami-id, ami-info), ...}}
 az_map_dict = pickle.load(open('./data/az_map_dict.pkl', 'rb'))  # {(region, az-id): az-name, ...}
 arm64_family = ['a1', 't4g', 'c6g', 'c6gd', 'c6gn', 'im4gn', 'is4gen', 'm6g', 'm6gd', 'r6g', 'r6gd', 'x2gd']
-LOG_BUCKET_NAME = 'spot-checker-data'
+LOG_BCKET_NAME = '' # buckut name to save log
 
 ### Spot Checker Arguments
 parser = argparse.ArgumentParser(description='Spot Checker Workload Information')
@@ -42,7 +42,7 @@ userdata = f"""#!/bin/bash
                 CURRENT_TIME=$(date +"%Y-%m-%d_%H-%M-%S")
                 INSTANCE_ID=$(ec2-metadata -i | cut -d " " -f 2)
                 echo "Instance start time: $CURRENT_TIME" > ~/{instance_type}_{az_id}_$INSTANCE_ID.txt
-                aws s3 cp ~/{instance_type}_{az_id}_$INSTANCE_ID.txt s3://query-sps-change-targetcapacity/start_time/{instance_type}_{az_id}_$INSTANCE_ID.txt
+                aws s3 cp ~/{instance_type}_{az_id}_$INSTANCE_ID.txt s3://{LOG_BCKET_NAME}/start_time/{instance_type}_{az_id}_$INSTANCE_ID.txt
                 """
 userdata_encoded = base64.b64encode(userdata.encode()).decode()
 
