@@ -64,13 +64,12 @@ spot_data_dict['launch_info'] = launch_info
 spot_data_dict['start_time'] = launch_time
 spot_data_dict['end_time'] = stop_time
 
-### session&client
-session = boto3.session.Session(profile_name='default')
-ec2 = session.client('ec2', region_name=region)
-
 
 ### Start Spot Checker
 def start_spot_checker(target_count):
+    ### session & client
+    session = boto3.session.Session(profile_name='default')
+    ec2 = session.client('ec2', region_name=region)
 
     create_request_response = ec2.request_spot_instances(
         InstanceCount=target_count,
@@ -116,6 +115,10 @@ def log_sampling(current_time, request_describe, instance_describe):
 
 
 def logging(request_id):
+    ### session & client
+    session = boto3.session.Session(profile_name='default')
+    ec2 = session.client('ec2', region_name=region)
+    
     ### Status Log Variables
     log_list = []
     instance_tag = False
