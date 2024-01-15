@@ -187,14 +187,14 @@ def logging(request_id):
         if (save_idx != 0) and (save_idx % 30 == 0):
             # Save log to Local
             spot_data_dict['logs'] = log_list
-            filename = f"logs/{instance_type}_{region}_{az_id}_{launch_time}_{instance_id}.pkl"
+            filename = f"logs/{instance_type}_{region}_{az_id}_{launch_time}_{request_id}_{instance_id}.pkl"
             print(f"save log of {filename}")
             Path('./logs').mkdir(exist_ok=True)
             pickle.dump(spot_data_dict, open(filename, 'wb'))
 
     # Save log to Local
     spot_data_dict['logs'] = log_list
-    filename = f"logs/{instance_type}_{region}_{az_id}_{launch_time}_{instance_id}.pkl"
+    filename = f"logs/{instance_type}_{region}_{az_id}_{launch_time}_{request_id}_{instance_id}.pkl"
     print(f"save final log of {filename}")
     Path('./logs').mkdir(exist_ok=True)
     pickle.dump(spot_data_dict, open(filename, 'wb'))
