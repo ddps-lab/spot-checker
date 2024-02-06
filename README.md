@@ -14,7 +14,8 @@ Spot-checker is collect stability data of Spot VMs across various public cloud v
 6. Controller save the log file of spot checkers to object storage
 7. You can analyze the spot checker log as ground truth of spot status at that time
 
-![spot-checker-overview]()
+<img width="661" alt="spot-checker-overview" src="https://github.com/ddps-lab/spot-checker/assets/106056971/41bd167b-5a80-4488-8299-b4993eeb54ac">
+
 
 ### **How to start?**
 - Check README file in each vendor's folder.
