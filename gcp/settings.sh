@@ -22,8 +22,4 @@ curl -O https://dl.google.com/dl/cloudsdk/channels/rapid/downloads/$FILENAME
 
 tar -xf $FILENAME
 chmod +x ./google-cloud-sdk/install.sh
-# ./google-cloud-sdk/install.sh -q
 ./google-cloud-sdk/install.sh
-
-# gcloud init
-# GOOGLE_APPLICATION_CREDENTIALS=KEY.json python3 spot-health-checker.py

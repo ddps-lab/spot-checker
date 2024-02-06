@@ -1,0 +1,10 @@
+eastus2 Standard_E96ads_v5
+westus2 Standard_D32as_v4
+westus2 Standard_D32a_v4
+northeurope Standard_E48a_v4
+ukwest Standard_D48as_v5
+ukwest Standard_E8-4as_v5
+japaneast Standard_E4as_v4
+westeurope Standard_E32a_v4
+northcentralus Standard_F16s
+eastus Standard_L48s_v3
