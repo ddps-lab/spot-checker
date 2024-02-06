@@ -10,10 +10,10 @@ bash settings.sh
 gcloud init
 ```
 
-1. upload your service account key to VM
+3. upload your service account key to VM
     1. If you do not have a service account key, check the link
     2. https://cloud.google.com/iam/docs/keys-create-delete#iam-service-account-keys-create-console
-2. Modify  service account key path and spot running time, then run!
+4. Modify  service account key path and spot running time, then run!
 
 ```
 vi run_workloads_parallels.sh

@@ -9,25 +9,25 @@ cd azure
 bash settings.sh
 ```
 
-1. restart shell
+3. restart shell
 
 ```
 exec -l $SHELL
 ```
 
-1. az login
+4. az login
 
 ```
 az login
 ```
 
-1. Go to the link and enter the code
+5. Go to the link and enter the code
 
 ```
 To sign in, use a web browser to open the page https://microsoft.com/devicelogin and enter the code ********* to authenticate.
 ```
 
-1. When you enter the code, you get the following response
+6. When you enter the code, you get the following response
 
 ```
 [
@@ -47,7 +47,7 @@ To sign in, use a web browser to open the page https://microsoft.com/devicelogin
   }
 ```
 
-1. Modify AZURE_SUBSCRIPTION_ID to “id” of response  and spot running time, then run!
+7. Modify AZURE_SUBSCRIPTION_ID to “id” of response  and spot running time, then run!
 
 ```
 vi run_workloads_parallels.sh

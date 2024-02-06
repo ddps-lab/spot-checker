@@ -9,26 +9,26 @@ cd spot-checker
 bash settings.sh
 ```
 
-1. Configure your AWS credentials
+3. Configure your AWS credentials
 
 ```
 aws configure
 ```
 
-1. Modify boto3 profile, S3 bucket names, and spot running time
+4. Modify boto3 profile, S3 bucket names, and spot running time
 
 ```
 vi workload_sampling.py
 vi spot-health-checker.py
 ```
 
-1. Run sampling code, or use sample workload data (10 workload)
+5. Run sampling code, or use sample workload data (10 workload)
 
 ```
 python3 workload_sampling.py
 ```
 
-1. Check parallel spot execution code, then run!
+6. Check parallel spot execution code, then run!
 
 ```
 vi run_workload_parallel.sh
