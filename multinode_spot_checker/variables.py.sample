@@ -1,0 +1,13 @@
+awscli_profile = ""
+prefix = ""
+log_stream_name_chage_status = ""
+log_stream_name_init_time = ""
+
+instance_type = ""
+region = ""
+az_id = ""
+instance_count = 1
+
+wait_minutes = 1 
+time_hours = 0
+time_minutes = 10
