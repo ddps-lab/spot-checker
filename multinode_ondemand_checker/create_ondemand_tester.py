@@ -36,7 +36,7 @@ def main():
     awscli_profile = variables.awscli_profile
     prefix = variables.prefix
     region = variables.region
-    log_group_name = f"{prefix}-spot-checker-multinode-log"
+    log_group_name = f"{prefix}-ondemand-checker-multinode-log"
     log_stream_name_chage_status = f"{variables.log_stream_name_chage_status}"
     log_stream_name_init_time = f"{variables.log_stream_name_init_time}"
 
@@ -48,7 +48,7 @@ def main():
     os.chdir(tf_project_dir)
 
     session = boto3.Session(profile_name=awscli_profile, region_name=region)
-    run_command(["terraform", "workspace", "new", "spot-checker-multinode"])
+    run_command(["terraform", "workspace", "new", "ondemand-checker-multinode"])
     run_command(["terraform", "init"])
     run_command(["terraform", "apply", "--parallelism=150", "--auto-approve", "--var", f"region={region}", "--var", f"prefix={prefix}","--var", f"awscli_profile={awscli_profile}", "--var", f"log_group_name={log_group_name}", "--var", f"log_stream_name_chage_status={log_stream_name_chage_status}", "--var", f"log_stream_name_init_time={log_stream_name_init_time}"])
    

@@ -26,7 +26,7 @@ instance_family = instance_type.split('.')[0]
 instance_arch = 'arm' if (instance_family in arm64_family) else 'x86'
 
 az_name = az_map_dict[(region, az_id)]
-log_group_name = f"{prefix}-spot-checker-multinode-log"
+log_group_name = f"{prefix}-ondemand-checker-multinode-log"
 log_stream_name = f"{variables.log_stream_name_init_time}"
 ami_id = region_ami[instance_arch][region][0]
 launch_time = datetime.datetime.now() + datetime.timedelta(minutes=wait_minutes)
@@ -41,71 +41,78 @@ current_time_ms=$((current_time * 1000))
 INSTANCE_ID=$(ec2-metadata -i | cut -d " " -f 2)
 INSTANCE_TYPE=$(ec2-metadata -t | cut -d " " -f 2)
 INSTANCE_AZ=$(ec2-metadata -z | cut -d " " -f 2)
-SPOT_REQUEST_ID=$(aws ec2 describe-instances --instance-ids $INSTANCE_ID --query 'Reservations[].Instances[].SpotInstanceRequestId' --region %s --output text)
-SPOT_VALID_FROM=$(aws ec2 describe-spot-instance-requests --spot-instance-request-ids $SPOT_REQUEST_ID --query 'SpotInstanceRequests[*].{ValidFrom:ValidFrom}' --region %s --output text)
-
+LAUNCHTIME=$(aws ec2 describe-instances --instance-ids $INSTANCE_ID --query 'Reservations[].Instances[].LaunchTime' --region %s --output text)
 log_event=$(cat <<EOF
 [
     {
         "timestamp": ${current_time_ms},
-        "message": "{\\"timestamp\\": \\"${current_time_ms}\\", \\"instance_id\\": \\"${INSTANCE_ID}\\", \\"instance_type\\": \\"${INSTANCE_TYPE}\\", \\"spot_request_id\\": \\"${SPOT_REQUEST_ID}\\", \\"az\\": \\"${INSTANCE_AZ}\\", \\"vail_from\\": \\"${SPOT_VALID_FROM}\\"}"
+        "message": "{\\"timestamp\\": \\"${current_time_ms}\\", \\"instance_id\\": \\"${INSTANCE_ID}\\", \\"instance_type\\": \\"${INSTANCE_TYPE}\\", \\"az\\": \\"${INSTANCE_AZ}\\", \\"launch_time\\": \\"${LAUNCHTIME}\\"}"
     }
 ]
 EOF
 )
 aws logs put-log-events --log-group-name %s --log-stream-name %s --log-events "$log_event" --region %s
 sudo shutdown -P +%s
-""" % ("%s", region, region, log_group_name, log_stream_name, region, time_minutes)
+""" % ("%s", region, log_group_name, log_stream_name, region, time_minutes)
 
 userdata_encoded = base64.b64encode(userdata.encode()).decode()
 
-### Spot Launch Specifications
-launch_spec = {
-    'ImageId': ami_id,
-    'InstanceType': instance_type,
-    'Placement': {'AvailabilityZone': az_name},
-    'IamInstanceProfile': {
-            'Arn': 'arn:aws:iam::741926482963:instance-profile/EC2toEC2_CW' # IAM ARN for CloudWatch access
-        },
-    'UserData': userdata_encoded,
-}
+
 launch_info = [instance_type, instance_family, instance_arch, region, az_id, az_name, ami_id]
 print(f"""Instance Type: {instance_type}\nInstance Family: {instance_family}\nInstance Arhictecture: {instance_arch}
 Region: {region}\nAZ-ID: {az_id}\nAZ-Name:{az_name}\nAMI ID: {ami_id}""")
 
-spot_data_dict = {}
-spot_data_dict['launch_spec'] = launch_spec
-spot_data_dict['launch_info'] = launch_info
-spot_data_dict['start_time'] = launch_time
-spot_data_dict['end_time'] = stop_time
+ondemand_data_dict = {}
+ondemand_data_dict['launch_info'] = launch_info
+ondemand_data_dict['start_time'] = launch_time
+ondemand_data_dict['end_time'] = stop_time
 
 
-### Start Spot Checker
-def start_spot_checker(target_count):
+### Start Ondemand Checker
+def start_ondemand_checker(target_count):
     ### session & client
     session = boto3.session.Session(profile_name='default')
     ec2 = session.client('ec2', region_name=region)
 
-    create_request_response = ec2.request_spot_instances(
-        InstanceCount=target_count,
-        LaunchSpecification=launch_spec,
-        #     SpotPrice=spot_price, # default value for on-demand price
-        ValidFrom=launch_time,
-        ValidUntil=stop_time,
-        Type='persistent',  # not 'one-time', persistent request
-        InstanceInterruptionBehavior='stop'
+    create_intances_response = ec2.run_instances(
+        ImageId = ami_id,
+        InstanceType = instance_type,
+        Placement = {'AvailabilityZone': az_name},
+        IamInstanceProfile = {
+            'Arn': 'arn:aws:iam::741926482963:instance-profile/EC2toEC2_CW' # IAM ARN for CloudWatch access
+        },
+        MinCount=1,
+        MaxCount=target_count,
+        UserData=userdata_encoded,
+        TagSpecifications=[
+            { 'ResourceType': 'instance',
+             'Tags': [
+                 {  'Key' : 'Name',
+                    'Value': f'{prefix}-multi-instance-test'
+                    }
+                 ]
+            }
+        ]
     )
-    siri_list = []
-    for rq in create_request_response['SpotInstanceRequests']:
-        siri_list.append(rq['SpotInstanceRequestId'])
 
-    spot_data_dict['create_requests'] = create_request_response
+    instance_list = []
+    for rq in create_intances_response['Instances']:
+        instance_list.append(rq['InstanceId'])
+
+
+    '''
+    UserData에서 shutdown을 하면 인스턴스가 stopped 상태로 변함
+    3분 대기 후 terminate
+    '''    
+    time.sleep(180)
+    terminate_response = ec2.terminate_instances(InstanceIds=instance_list)
+    
     time.sleep(1)
-    return siri_list
+    return instance_list
 
 
 
 if __name__ == "__main__":
     instance_count = variables.instance_count
     print(instance_count)
-    spot_instance_request_id_list = start_spot_checker(instance_count)
+    ondemand_instance_request_id_list = start_ondemand_checker(instance_count)

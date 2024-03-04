@@ -20,7 +20,7 @@ def main():
     awscli_profile = variables.awscli_profile
     prefix = variables.prefix
     region = variables.region
-    log_group_name = f"{prefix}-spot-checker-multinode-log"
+    log_group_name = f"{prefix}-ondemand-checker-multinode-log"
     
     tf_project_dir = "./IaC-cloudwatchlogs"
 
@@ -28,10 +28,10 @@ def main():
     os.chdir(tf_project_dir)
 
     
-    run_command(["terraform", "workspace", "select", "-or-create", "spot-checker-multinode"])
+    run_command(["terraform", "workspace", "select", "-or-create", "ondemand-checker-multinode"])
     run_command(["terraform", "destroy", "--auto-approve", "--var", f"region={region}", "--var", f"prefix={prefix}","--var", f"awscli_profile={awscli_profile}", "--var", f"log_group_name={log_group_name}"])
     run_command(["terraform", "workspace", "select", "default"])
-    run_command(["terraform", "workspace", "delete", "spot-checker-multinode"])
+    run_command(["terraform", "workspace", "delete", "ondemand-checker-multinode"])
 
 
 if __name__ == "__main__":
