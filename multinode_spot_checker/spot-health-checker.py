@@ -92,8 +92,7 @@ def start_spot_checker(target_count):
         #     SpotPrice=spot_price, # default value for on-demand price
         ValidFrom=launch_time,
         ValidUntil=stop_time,
-        Type='persistent',  # not 'one-time', persistent request
-        InstanceInterruptionBehavior='stop'
+        Type='persistent'  # not 'one-time', persistent request
     )
     siri_list = []
     for rq in create_request_response['SpotInstanceRequests']:
