@@ -31,7 +31,7 @@ def main():
     awscli_profile = variables.awscli_profile
     prefix = variables.prefix
     region = variables.region
-    log_group_name = f"{prefix}-spot-availability-tester-log"
+    log_group_name = f"{prefix}-ondemand-availability-tester-log"
     log_stream_name_chage_status = f"{variables.log_stream_name_chage_status}"
     log_stream_name_init_time = f"{variables.log_stream_name_init_time}"
     tf_project_dir = "./IaC"
@@ -40,15 +40,15 @@ def main():
 
     boto3_session = boto3.Session(profile_name=awscli_profile, region_name=region)
     logs_client = boto3_session.client('logs')
-    run_command(["terraform", "workspace", "select", "-or-create", "spot-checker-multinode"])
-    run_command(["terraform", "destroy", "--parallelism=150", "--target=module.spot-availability-tester", "--auto-approve", "--var", f"region={region}", "--var", f"prefix={prefix}","--var", f"awscli_profile={awscli_profile}", "--var", f"log_group_name={log_group_name}", "--var", f"log_stream_name_chage_status={log_stream_name_chage_status}", "--var", f"log_stream_name_init_time={log_stream_name_init_time}"])
+    run_command(["terraform", "workspace", "select", "-or-create", "ondemand-checker-multinode"])
+    run_command(["terraform", "destroy", "--parallelism=150", "--auto-approve", "--var", f"region={region}", "--var", f"prefix={prefix}","--var", f"awscli_profile={awscli_profile}", "--var", f"log_group_name={log_group_name}", "--var", f"log_stream_name_chage_status={log_stream_name_chage_status}", "--var", f"log_stream_name_init_time={log_stream_name_init_time}"])
 
 
-    run_command(["terraform", "workspace", "select", "-or-create", "spot-checker-multinode"])
+    run_command(["terraform", "workspace", "select", "-or-create", "ondemand-checker-multinode"])
     run_command(["terraform", "destroy", "--parallelism=150", "--auto-approve", "--var", f"region={region}", "--var", f"prefix={prefix}","--var", f"awscli_profile={awscli_profile}", "--var", f"log_group_name={log_group_name}", "--var", f"log_stream_name_chage_status={log_stream_name_chage_status}", "--var", f"log_stream_name_init_time={log_stream_name_init_time}"])
     run_command(["terraform", "workspace", "select", "default"])
-    run_command(["terraform", "workspace", "delete", "spot-checker-multinode"])
-    delete_cloudwatch_log_group(f"/aws/lambda/{prefix}-spot-availability-tester", logs_client)
+    run_command(["terraform", "workspace", "delete", "ondemand-checker-multinode"])
+    delete_cloudwatch_log_group(f"/aws/lambda/{prefix}-ondemand-availability-tester", logs_client)
     delete_cloudwatch_log_group(f"/aws/lambda/{prefix}-terminate-no-name-instances", logs_client)
 
 

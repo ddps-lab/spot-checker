@@ -6,7 +6,7 @@ import os
 prefix = variables.prefix
 awscli_profile = variables.awscli_profile
 region = variables.region
-log_group_name = f"{prefix}-spot-checker-multinode-log"
+log_group_name = f"{prefix}-ondemand-checker-multinode-log"
 log_stream_name_chage_status = variables.log_stream_name_chage_status
 log_stream_name_init_time = variables.log_stream_name_init_time
 instancetype = variables.instance_type
