@@ -1,10 +1,1 @@
-t4g.nano eu-west-1 euw1-az1
-m3.medium eu-central-1 euc1-az3
-c6gd.medium us-west-2 usw2-az1
-t3.nano eu-west-3 euw3-az3 
-m1.small ap-southeast-2 apse2-az3 
-a1.medium ap-northeast-1 apne1-az2 
-r5dn.large eu-west-1 euw1-az3 
-c5ad.2xlarge us-east-2 use2-az2 
-c1.medium us-west-2 usw2-az1 
-inf1.xlarge us-east-2 use2-az2
+t4g.nano eu-west-1 euw1-az1 3
