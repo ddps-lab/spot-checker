@@ -28,6 +28,17 @@ variable "base_instance_name" {
   type = string
   default = ""
 }
+
+variable "email" {
+  type = string
+  default = ""
+}
+
+variable "scopes" {
+  type = string
+  default = ""
+}
+
 variable "target_size" {
   type = number
   default = 1
