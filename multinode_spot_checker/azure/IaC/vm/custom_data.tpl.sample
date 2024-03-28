@@ -1,0 +1,30 @@
+#!/bin/bash
+current_time=$(date +%s)
+current_time_ms=$((current_time * 1000))
+log_group_name="csk-spot-checker-multinode-log"
+log_stream_name_init_time="init_time"
+region="us-east-2"
+
+sudo apt-get update && sudo apt-get install -y jq
+
+response=$(curl -s -H Metadata:true --noproxy "*" "http://169.254.169.254/metadata/instance/compute/?api-version=2021-02-01" | python3 -m json.tool)
+vm_id=$(echo $response | jq -r '.compute.vmId')
+vm_size=$(echo $response | jq -r '.compute.vmSize')
+location=$(echo $response | jq -r '.compute.location')
+
+log_event=$(cat <<EOF
+[
+    {
+        "timestamp": ${current_time_ms},
+        "message": "{\\"timestamp\\": \\"${current_time_ms}\\", \\"vm_id\\": \\"${vm_id}\\", \\"vm_size\\": \\"${vm_size}\\", \\"location\\": \\"${location}\\"}"
+    }
+]
+EOF
+)
+
+sudo apt-get install -y awscli
+aws configure set aws_access_key_id "YOUR_AWS_ACCESS_KEY"
+aws configure set aws_secret_access_key "YOUR_AWS_SECERT_ACCESS_KEY"
+aws configure set region us-east-2
+
+aws logs put-log-events --log-group-name "$log_group_name" --log-stream-name "$log_stream_name_init_time" --log-events "$log_event" --region "$region"
