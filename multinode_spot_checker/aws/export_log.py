@@ -17,7 +17,7 @@ instance_count = variables.instance_count
 session = boto3.Session(profile_name=awscli_profile, region_name=region)
 client = session.client('logs')
 
-sps = "additional"
+sps = "sps1"
 os.mkdir(f"./log/{sps}/{instancetype}_{az}_{instance_count}_{log_group_name}")
 for log_stream_name in [log_stream_name_chage_status, log_stream_name_init_time]:
     next_token = None
