@@ -27,3 +27,8 @@ variable "vm_size" {
   type    = string
   default = ""
 }
+
+variable "time_minutes" {
+  type    = string
+  default = ""
+}

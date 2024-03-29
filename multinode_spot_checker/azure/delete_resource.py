@@ -2,6 +2,8 @@ import subprocess
 import sys
 import os
 import variables
+from azure.identity import AzureCliCredential
+from azure.mgmt.resource import ResourceManagementClient
 
 def run_command(command):
     process = subprocess.Popen(
@@ -21,7 +23,13 @@ def main():
     prefix = variables.prefix
     region = variables.region
     log_group_name = f"{prefix}-spot-checker-multinode-log"
-    
+    resource_group_name = f"{prefix}-multinode-spot-checker1"
+    azurecli_user_id = variables.azurecli_user_id
+    credential = AzureCliCredential()
+    resource_client = ResourceManagementClient(credential, azurecli_user_id)
+
+    resource_client.resource_groups.begin_delete(resource_group_name)
+
     tf_project_dir = "./IaC-cloudwatchlogs"
 
 

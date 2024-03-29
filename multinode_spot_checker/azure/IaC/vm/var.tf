@@ -6,3 +6,4 @@ variable "ssh-username" {}
 variable "ssh-keyname" {}
 variable "vm_count" {}
 variable "vm_size" {}
+variable "time_minutes" {}

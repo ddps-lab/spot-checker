@@ -14,4 +14,5 @@ module "vm" {
   vm_count            = var.vm_count
   vm_size             = var.vm_size
   depends_on          = [azurerm_resource_group.multinode-spot-resource-group]
+  time_minutes        = var.time_minutes
 }

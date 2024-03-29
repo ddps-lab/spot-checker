@@ -3,14 +3,6 @@ resource "tls_private_key" "multinode-spot-key" {
   rsa_bits  = 4096
 }
 
-resource "azurerm_storage_account" "multinode-spot-sta" {
-  name                     = "${var.prefix}sga"
-  resource_group_name      = var.resource_group_name
-  location                 = var.location
-  account_tier             = "Standard"
-  account_replication_type = "LRS"
-}
-
 resource "azurerm_linux_virtual_machine" "multinode-spot-vm" {
   count                 = var.vm_count
   name                  = "${var.prefix}-vm-${count.index}"
@@ -42,8 +34,18 @@ resource "azurerm_linux_virtual_machine" "multinode-spot-vm" {
     sku       = "20_04-lts-gen2"
     version   = "latest"
   }
+}
 
-  boot_diagnostics {
-    storage_account_uri = azurerm_storage_account.multinode-spot-sta.primary_blob_endpoint
+resource "azurerm_dev_test_global_vm_shutdown_schedule" "example" {
+  count              = var.vm_count
+  virtual_machine_id = azurerm_linux_virtual_machine.multinode-spot-vm[count.index].id
+  location           = var.location
+  enabled            = true
+
+  daily_recurrence_time = var.time_minutes
+  timezone              = "UTC"
+
+  notification_settings {
+    enabled = false
   }
 }

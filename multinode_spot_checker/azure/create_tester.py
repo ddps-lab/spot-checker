@@ -5,6 +5,7 @@ import os
 import time
 import boto3
 import json
+import datetime
 
 def run_command(command):
     process = subprocess.Popen(
@@ -33,7 +34,7 @@ def create_log_stream(log_group_name, log_stream_name, logs_client):
     else:
         print(f"Log stream {log_stream_name} already exists.")
 
-def azure_vm_list(resource_group_name):
+def azure_vm_list(resource_group_name, time):
     command = [
         'az', 'vm', 'list', '-g', resource_group_name,
         '--query', '[].{vm_id: vmId, vm_size: hardwareProfile.vmSize, TimeCreated: timeCreated}',
@@ -44,6 +45,8 @@ def azure_vm_list(resource_group_name):
     output = result.stdout
 
     vms_info = json.loads(output)
+    for item in vms_info:
+        item['terraform_init'] = time
 
     return vms_info
 
@@ -53,44 +56,51 @@ def main():
     azurecli_user_id = variables.azurecli_user_id
     prefix = variables.prefix
     location = variables.location
-    resource_group_name = f"{prefix}-multinode-spot-checker"
+    resource_group_name = f"{prefix}-multinode-spot-checker1"
     log_group_name = f"{prefix}-spot-checker-multinode-log"
     log_stream_name_change_status = f"{variables.log_stream_name_change_status}"
     log_stream_name_init_time = f"{variables.log_stream_name_init_time}"
     vm_count = variables.vm_count
     vm_size = variables.vm_size
+    time_minutes = variables.time_minutes
+    stop_time = datetime.datetime.utcnow() + datetime.timedelta(minutes=int(time_minutes))
+    stop_time = stop_time.strftime("%H%M")
+
 
     session = boto3.Session(profile_name=awscli_profile, region_name="us-east-2")
     logs_client = session.client('logs')
     create_log_stream(log_group_name, log_stream_name_change_status, logs_client)
     create_log_stream(log_group_name, log_stream_name_init_time, logs_client)
     tf_project_dir = "./IaC"
-    
+
     os.chdir(tf_project_dir)
 
     run_command(["terraform", "workspace", "new", "spot-checker-multinode"])
     run_command(["terraform", "init"])
     try:
+        terraform_init_time = time.time()
         run_command(["terraform", "apply", "--parallelism=150", "--auto-approve", 
                      "--var", f"location={location}", "--var", f"prefix={prefix}", 
                      "--var", f"azurecli_user_id={azurecli_user_id}", "--var", f"resource_group_name={resource_group_name}", 
-                     "--var", f"vm_size={vm_size}", "--var", f"vm_count={vm_count}"])
+                     "--var", f"vm_size={vm_size}", "--var", f"vm_count={vm_count}",
+                     "--var", f"time_minutes={stop_time}"])
     except:
         run_command(["terraform", "workspace", "select", "-or-create", "spot-checker-multinode"])
         run_command(["terraform", "destroy", "--parallelism=150", "--auto-approve", 
                      "--var", f"location={location}", "--var", f"prefix={prefix}",
                      "--var", f"azurecli_user_id={azurecli_user_id}", "--var", f"resource_group_name={resource_group_name}", 
-                     "--var", f"vm_size={vm_size}", "--var", f"vm_count={vm_count}"])
+                     "--var", f"vm_size={vm_size}", "--var", f"vm_count={vm_count}",
+                     "--var", f"time_minutes={stop_time}"])
         
-        run_command(["terraform", "workspace", "select", "default"])
-        run_command(["terraform", "workspace", "delete", "spot-checker-multinode"])
+    print("###### END TERRAFORM APPLY ######")
+    time.sleep(60)
 
-    var_if = "if1"
-    vm_response = azure_vm_list(resource_group_name)
+    var_if = "if3"
+    vm_response = azure_vm_list(resource_group_name, terraform_init_time)
     
     os.chdir("..")
     os.mkdir(f"./log/{var_if}/{vm_size}_{location}_{vm_count}")
-    json_path = f"./log/{var_if}/{vm_size}_{location}_{vm_count}/{vm_size}_{location}_{vm_count}.json"
+    json_path = f"./log/{var_if}/{vm_size}_{location}_{vm_count}/{vm_size}_{location}_{vm_count}_{log_stream_name_change_status}.json"
     with open(json_path, 'w') as file:
         json.dump(vm_response, file, indent=4)
 

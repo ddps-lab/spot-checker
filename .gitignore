@@ -262,3 +262,6 @@ cython_debug/
 # etc
 **/*.png
 **/*.ipynb
+
+# custom data
+**/custom_data.tpl

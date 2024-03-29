@@ -1,5 +1,7 @@
 # 클라우드 & CloudWatch정보
 awscli_profile = "default"
+aws_access_key_id = "AWS_ACCESS_KEY_ID"
+aws_secret_access_key = "AWS_SECRET_ACCESS_KEY"
 azurecli_user_id = "12345678-1234-1234-1234-123456789012" # 계정의 id 입력
 prefix = "prefix"
 log_stream_name_change_status = "change_status"
@@ -7,8 +9,9 @@ log_stream_name_init_time = "init_time"
 region = "us-east-2"
 
 # 인스턴스 정보
-vm_size = "Standard_F2"
-location = "East US"
+vm_size = "Standard_F8s_v2"
+location = "centralindia"
 
 # 생성할 인스턴스 수
-instance_count = 20
+vm_count = 50
+time_minutes = 10
