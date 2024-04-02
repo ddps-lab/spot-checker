@@ -28,10 +28,12 @@ def main():
     credential = AzureCliCredential()
     resource_client = ResourceManagementClient(credential, azurecli_user_id)
 
-    resource_client.resource_groups.begin_delete(resource_group_name)
+    try:
+        resource_client.resource_groups.begin_delete(resource_group_name)
+    except:
+        print("Resource group already deleted or doesn't exit.\nPlease check your resource group")
 
     tf_project_dir = "./IaC-cloudwatchlogs"
-
 
     os.chdir(tf_project_dir)
 

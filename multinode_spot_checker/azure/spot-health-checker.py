@@ -11,6 +11,7 @@ import subprocess
 import json
 import boto3
 import time
+from threading import Thread
 
 azurecli_user_id = variables.azurecli_user_id
 credential = AzureCliCredential()
@@ -33,6 +34,7 @@ current_time_ms=$((current_time * 1000))
 sudo apt-get update && sudo apt-get install -y -qq jq
 response=$(curl -s -H Metadata:true --noproxy "*" "http://169.254.169.254/metadata/instance/compute/?api-version=2021-02-01" | python3 -m json.tool)
 vm_id=$(echo $response | jq -r '.vmId')
+vm_name=$(echo $response | jq -r '.name')
 vm_size=$(echo $response | jq -r '.vmSize')
 location=$(echo $response | jq -r '.location')
 echo $vm_id $vm_size $location
@@ -40,7 +42,7 @@ log_event=$(cat <<EOF
 [
     {
         "timestamp": ${current_time_ms},
-        "message": "{\\"timestamp\\": \\"${current_time_ms}\\", \\"vm_id\\": \\"${vm_id}\\", \\"vm_size\\": \\"${vm_size}\\", \\"location\\": \\"${location}\\"}"
+        "message": "{\\"timestamp\\": \\"${current_time_ms}\\", \\"vm_id\\": \\"${vm_id}\\", \\"vm_name\\": \\"${vm_name}\\", \\"vm_size\\": \\"${vm_size}\\", \\"location\\": \\"${location}\\"}"
     }
 ]
 EOF
@@ -62,8 +64,7 @@ def create_group(group_name, location):
 
 
 def delete_group(group_name):
-    poller = resource_client.resource_groups.begin_delete(group_name)
-    poller.result()
+    resource_client.resource_groups.begin_delete(group_name)
 
 
 def get_status(group_name, name):
@@ -117,7 +118,7 @@ def create_spot_instance(group_name, location, vm_size, name):
             "image_reference": {
                 "publisher": "Canonical",
                 "offer": "0001-com-ubuntu-server-focal",
-                "sku": "20_04-lts-gen2",
+                "sku": "20_04-lts-arm64" if "p" in vm_size else "20_04-lts-gen2",
                 "version": "latest"
             }
         },
@@ -142,15 +143,12 @@ def create_spot_instance(group_name, location, vm_size, name):
         },
         "priority": "Spot",
     })
-    # vm_result = poller.result()
-    print("VM Allocated")
-    # return vm_result
 
 
 def auto_shutdown(group_name, name, stop_time):
     command = [
     'az', 'vm', 'auto-shutdown', '-g', group_name,
-    '-n', name, '--time', "5"
+    '-n', name, '--time', f"{stop_time}"
     ]  
     subprocess.run(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
 
@@ -168,45 +166,58 @@ def azure_vm_list(resource_group_name, launch_time):
     vms_info = json.loads(output)
     for item in vms_info:
         item['request_time'] = f"{launch_time}"
-    vms_info = json.dumps(vms_info[0])
 
     logs_client = boto3.client('logs')
-    log_event = {
-        'timestamp': int(time.time() * 1000),
-        'message': vms_info
-    }
-    logs_client.put_log_events(
-        logGroupName=log_group_name, logStreamName=log_stream_name_status_change, logEvents=[log_event])
+
+    for item in vms_info:
+        item = json.dumps(item)
+        log_event = {
+            'timestamp': int(time.time() * 1000),
+            'message': item
+        }
+        logs_client.put_log_events(logGroupName=log_group_name, logStreamName=log_stream_name_status_change, logEvents=[log_event])
+
+
+def spot_request(vm_size, location, resource_group_name, instance_name, minutes):
+    try:
+        launch_time = datetime.datetime.now(datetime.timezone.utc).isoformat()
+        print(f"""\nInstance Type: {vm_size}\nInstance Zone: {location}\nGroup Name: {resource_group_name}\nInstance Name: {instance_name}\nLuanch Time: {launch_time}\n""")
+        create_spot_instance(resource_group_name, location, vm_size, instance_name)
+
+        stop_time = datetime.datetime.utcnow() + datetime.timedelta(minutes=int(minutes))
+        stop_time = stop_time.strftime("%H%M")
+        auto_shutdown(resource_group_name, instance_name, stop_time)
+    except:
+        print("ERROR OUCCURED")
+        raise
 
 
 def main():
-    resource_group_name = f"{prefix}-multinode-spot-checker"
+    resource_group_name = f"{prefix}-multinode-spot-checker1"
     location = variables.location
     vm_size = variables.vm_size
     vm_count = variables.vm_count
     minutes = variables.time_minutes
-
+    
     create_group(resource_group_name, location)
 
+    threads = []
+
+    launch_time = datetime.datetime.now(datetime.timezone.utc).isoformat()
     for i in range(vm_count):
         instance_name = f"{prefix}-vm-{i}"
-        try:
-            launch_time = datetime.datetime.now(datetime.timezone.utc).isoformat()
-            print(f"""Instance Type: {vm_size}\nInstance Zone: {location}\nGroup Name: {resource_group_name}\nInstance Name: {instance_name}\nLuanch Time: {launch_time}\n""")
-            create_spot_instance(resource_group_name, location,
-                                vm_size, instance_name)
+        th = Thread(target=spot_request, args=(vm_size, location, resource_group_name, instance_name, minutes))
+        th.start()
+        threads.append(th)
 
-            stop_time = datetime.datetime.utcnow() + datetime.timedelta(minutes=int(minutes))
-            stop_time = stop_time.strftime("%H%M")
-            print("SET AUTO SHUTDOWN")
-            auto_shutdown(resource_group_name, instance_name, stop_time)
-            print("SAVE LOG TO CLOUDWATCH\n")
-            azure_vm_list(resource_group_name, launch_time)
-        except:
-            print("ERROR OUCCURED")
-            delete_group(resource_group_name)
-            raise
-
+    for th in threads:
+        th.join()
+    
+    print("VM Allocated")
+    # vm_list가 바로 조회되지 않아서 3분간 대기 후 로깅
+    time.sleep(180)
+    azure_vm_list(resource_group_name, launch_time)
+    print("Logging azure vm list")
 
 if __name__ == "__main__":
     main()

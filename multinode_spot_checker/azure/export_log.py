@@ -17,8 +17,10 @@ vm_size = variables.vm_size
 session = boto3.Session(profile_name=awscli_profile, region_name=region)
 client = session.client('logs')
 
-var_if = "if3"
-for log_stream_name in [log_stream_name_init_time]:
+var_if = "if1"
+os.mkdir(f'./log/{var_if}')
+os.mkdir(f'./log/{var_if}/{vm_size}_{location}_{vm_count}')
+for log_stream_name in [log_stream_name_change_status, log_stream_name_init_time]:
     next_token = None
     log_data = []
     # 로그 스트림에서 로그 이벤트를 반복적으로 가져오기
@@ -40,7 +42,7 @@ for log_stream_name in [log_stream_name_init_time]:
         next_token = response['nextForwardToken']
         if not response['events']:
             break
-
-    with open(f'./log/{var_if}/{vm_size}_{location}_{vm_count}/{vm_size}_{location}_{vm_count}_{log_stream_name_init_time}.json', 'w') as json_file:
+    
+    with open(f'./log/{var_if}/{vm_size}_{location}_{vm_count}/{vm_size}_{location}_{vm_count}_{log_stream_name}.json', 'w') as json_file:
         json.dump(log_data, json_file, indent=4)
     print(f'{vm_size}_{location}_{vm_count}_{log_stream_name}.json', "로그 다운로드 완료")
