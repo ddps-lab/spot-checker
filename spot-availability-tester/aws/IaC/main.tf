@@ -37,6 +37,18 @@ module "spot-availability-tester" {
   log_group_name = var.log_group_name
   log_stream_name = var.spot_log_stream_name
   lambda_rate = var.lambda_rate
+  use_ec2 = var.use_ec2
+}
+
+module "tester-ec2" {
+  source = "./tester-ec2"
+  count = var.use_ec2 ? 1 : 0
+  prefix = var.prefix
+  vpc_id = module.vpc.vpc_id
+  subnet_ids = module.vpc.subnet_ids
+  region = var.region
+  iam_role = aws_iam_instance_profile.tester-ec2-role-instance-profile.name
+  function_url = module.spot-availability-tester.function_url
 }
 
 module "quota-availability-updater" {
