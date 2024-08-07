@@ -20,6 +20,8 @@ resource "aws_subnet" "spot_availability_tester_subnet" {
   count             = length(data.aws_availability_zones.region_azs.names)
   cidr_block        = "192.168.${count.index}.0/24"
   availability_zone = data.aws_availability_zones.region_azs.names[count.index]
+  enable_resource_name_dns_a_record_on_launch = true
+  map_public_ip_on_launch = true
   tags = {
     "Name" : "${var.prefix}-spot-availability-tester-subnet-${substr(data.aws_availability_zones.region_azs.names[count.index], -1, 1)}"
   }

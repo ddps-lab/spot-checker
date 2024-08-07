@@ -12,3 +12,14 @@
 ### 삭제방법 
 - `delete_tester.py`를 통해 측정 환경을 삭제합니다.
 - `delete_log_group.py`를 실행하는 경우, 측정된 데이터가 모두 삭제될 수 있으니 유의 바랍니다.
+
+---
+### EC2 사용 방법
+1. variables.py 작성 시, `use_ec2 = "true"`와 같이 설정합니다.
+2. `create_tester.py`를 통해 테스트 환경을 생성합니다.
+- EC2를 사용할 경우, `create_tester.py`를 통해 tester infra를 생성한 직후 즉시 테스트가 시작되지 않으며, 각 Region의 EC2 Instance에 접속해 추가 작업을 수행해야 합니다.
+3. 테스트할 Region의 EC2 Console로 접속 후, 생성된 EC2 Instance에 SSH로 접속합니다.
+4. tester.go, tester.sh, 해당 Region에서 테스트 할 `generate_test_data.py`를 통해 생성된 csv 파일을 복사합니다.
+5. tester.sh의 내용 중, CSV의 File Name을 지정하는 `filename` 변수와, 생성 주기를 지정하는 `spawnrate` 변수를 설정합니다.
+6. `chmod +x tester.sh` 후, `./tester.sh`를 통해 Script를 실행합니다. 만약, Shell Session이 끊어질 수 있는 상황이라면 `nohup ./tester.sh &` 명령을 사용합니다.
+7. 실험을 종료하고 싶은 경우, `Ctrl + C`를 통해 Interrupt 하거나 `pkill tester.sh`를 통해 nohup으로 실행된 테스트 스크립트를 종료합니다.
