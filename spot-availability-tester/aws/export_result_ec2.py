@@ -57,12 +57,12 @@ def spot_log_parse_log_data_to_csv(input_file, output_file):
 
     with open(output_file, 'w', newline='') as f:
         writer = csv.writer(f)
-        writer.writerow(["InstanceType", "AZ", "Timestamp", "Code", "RawCode", "RequestCreateTime", "StatusUpdateTime"])  # 헤더
+        writer.writerow(["InstanceType", "AZ", "Timestamp", "Code", "RawCode", "RequestCreateTime", "StatusUpdateTime", "DDDRequestTime"])  # 헤더
 
         for line in lines:
             log_timestamp, log_data = line.split(' ', 1)
             log_json = json.loads(log_data.strip())
-            writer.writerow([log_json['InstanceType'], log_json['AZ'], log_json['Timestamp'], log_json['Code'], log_json['RawCode'], log_json['RequestCreateTime'], log_json['StatusUpdateTime']])
+            writer.writerow([log_json['InstanceType'], log_json['AZ'], log_json['Timestamp'], log_json['Code'], log_json['RawCode'], log_json['RequestCreateTime'], log_json['StatusUpdateTime'], log_json['DDDRequestTime']])
 
 def terminate_log_parse_log_data_to_csv(input_file, output_file):
     with open(input_file, 'r') as f:
