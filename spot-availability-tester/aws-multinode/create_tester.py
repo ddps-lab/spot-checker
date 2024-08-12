@@ -40,8 +40,6 @@ def main():
     spot_log_stream_name = f"{variables.log_stream_name}-spot"
     terminate_log_stream_name = f"{variables.log_stream_name}-terminate"
     pending_log_stream_name = f"{variables.log_stream_name}-pending"
-    spawn_rate = "rate(1 minute)" if variables.spawn_rate == 1 else f"rate({variables.spawn_rate} minutes)"
-    use_ec2 = variables.use_ec2
 
     tf_project_dir = "./IaC"
     with open('regions.txt', 'r', encoding='utf-8') as file:
