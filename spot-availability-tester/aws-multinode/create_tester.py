@@ -45,8 +45,6 @@ def main():
     with open('regions.txt', 'r', encoding='utf-8') as file:
         regions = [line.strip() for line in file.readlines()]
 
-    instance_type_data = {}
-    availability_zone_data = {}
     for region in regions:
         session = boto3.Session(profile_name=awscli_profile, region_name=region)
         logs_client = session.client('logs')
@@ -54,10 +52,6 @@ def main():
         create_log_stream(log_group_name, spot_log_stream_name, logs_client)
         create_log_stream(log_group_name, terminate_log_stream_name, logs_client)
         create_log_stream(log_group_name, pending_log_stream_name, logs_client)
-
-        tmp_data = pd.read_csv(f'./test_data/{region}.csv')
-        instance_type_data[f"{region}"] = ",".join(f'"{item}"' for item in tmp_data['InstanceType'].tolist())
-        availability_zone_data[f"{region}"] = ",".join(f'"{item}"' for item in tmp_data['AZ'].tolist())
 
     os.chdir(tf_project_dir)
     for region in regions:

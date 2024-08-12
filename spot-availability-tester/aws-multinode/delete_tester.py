@@ -36,30 +36,12 @@ def main():
     spot_log_stream_name = f"{variables.log_stream_name}-spot"
     terminate_log_stream_name = f"{variables.log_stream_name}-terminate"
     pending_log_stream_name = f"{variables.log_stream_name}-pending"
-    spawn_rate = "rate(1 minute)" if variables.spawn_rate == 1 else f"rate({variables.spawn_rate} minutes)"
 
     tf_project_dir = "./IaC"
     with open('regions.txt', 'r', encoding='utf-8') as file:
         regions = [line.strip() for line in file.readlines()]
 
-    instance_type_data = {}
-    availability_zone_data = {}
-    for region in regions:
-        tmp_data = pd.read_csv(f'./test_data/{region}.csv')
-        instance_type_data[f"{region}"] = ",".join(f'"{item}"' for item in tmp_data['InstanceType'].tolist())
-        availability_zone_data[f"{region}"] = ",".join(f'"{item}"' for item in tmp_data['AZ'].tolist())
-
     os.chdir(tf_project_dir)
-
-    for region in regions:
-        boto3_session = boto3.Session(profile_name=awscli_profile, region_name=region)
-        logs_client = boto3_session.client('logs')
-        run_command(["terraform", "workspace", "select", "-or-create", f"{region}"])
-        run_command(["terraform", "destroy", "--parallelism=150", "--target=module.spot-availability-tester", "--auto-approve", "--var", f"region={region}", "--var", f"prefix={prefix}","--var", f"awscli_profile={awscli_profile}", "--var", f"log_group_name={log_group_name}", "--var", f"spot_log_stream_name={spot_log_stream_name}", "--var", f"terminate_log_stream_name={terminate_log_stream_name}", "--var", f"pending_log_stream_name={pending_log_stream_name}", "--var", f"instance_types=[{instance_type_data[region]}]", "--var", f"instance_types_az=[{availability_zone_data[region]}]", "--var", f"lambda_rate={spawn_rate}"])
-
-    print("Wait for terminate all of instances...")
-    time.sleep(150)
-    print("Instance terimnate finished!")
 
     for region in regions:
         boto3_session = boto3.Session(profile_name=awscli_profile, region_name=region)
