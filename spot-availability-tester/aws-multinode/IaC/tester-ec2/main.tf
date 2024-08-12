@@ -43,8 +43,6 @@ sudo su
 mkdir /ddd
 chmod 777 /ddd -R
 apt update && apt install golang -y
-echo "export function_url=${var.function_url}" >> ~ubuntu/.bashrc
-echo "export function_url=${var.function_url}" >> /root/.bashrc
 EOF
   root_block_device {
     volume_size           = 50    # 볼륨 크기를 지정합니다.

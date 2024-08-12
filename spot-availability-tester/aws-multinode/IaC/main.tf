@@ -31,7 +31,6 @@ module "tester-ec2" {
   subnet_ids = module.vpc.subnet_ids
   region = var.region
   iam_role = aws_iam_instance_profile.tester-ec2-role-instance-profile.name
-  function_url = module.spot-availability-tester.function_url
 }
 
 module "quota-availability-updater" {
