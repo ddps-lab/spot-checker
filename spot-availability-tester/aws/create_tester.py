@@ -42,6 +42,7 @@ def main():
     pending_log_stream_name = f"{variables.log_stream_name}-pending"
     spawn_rate = "rate(1 minute)" if variables.spawn_rate == 1 else f"rate({variables.spawn_rate} minutes)"
     use_ec2 = variables.use_ec2
+    describe_rate = variables.describe_rate
 
     tf_project_dir = "./IaC"
     with open('regions.txt', 'r', encoding='utf-8') as file:
@@ -66,7 +67,7 @@ def main():
         session = boto3.Session(profile_name=awscli_profile, region_name=region)
         run_command(["terraform", "workspace", "new", f"{region}"])
         run_command(["terraform", "init"])
-        run_command(["terraform", "apply", "--parallelism=150", "--auto-approve", "--var", f"region={region}", "--var", f"prefix={prefix}","--var", f"awscli_profile={awscli_profile}", "--var", f"log_group_name={log_group_name}", "--var", f"spot_log_stream_name={spot_log_stream_name}", "--var", f"terminate_log_stream_name={terminate_log_stream_name}", "--var", f"pending_log_stream_name={pending_log_stream_name}", "--var", f"instance_types=[{instance_type_data[region]}]", "--var", f"instance_types_az=[{availability_zone_data[region]}]", "--var", f"lambda_rate={spawn_rate}", "--var", f"use_ec2={use_ec2}"])
+        run_command(["terraform", "apply", "--parallelism=150", "--auto-approve", "--var", f"region={region}", "--var", f"prefix={prefix}","--var", f"awscli_profile={awscli_profile}", "--var", f"log_group_name={log_group_name}", "--var", f"spot_log_stream_name={spot_log_stream_name}", "--var", f"terminate_log_stream_name={terminate_log_stream_name}", "--var", f"pending_log_stream_name={pending_log_stream_name}", "--var", f"instance_types=[{instance_type_data[region]}]", "--var", f"instance_types_az=[{availability_zone_data[region]}]", "--var", f"lambda_rate={spawn_rate}", "--var", f"use_ec2={use_ec2}", "--var", f"describe_rate={describe_rate}"])
 
 if __name__ == "__main__":
     main()

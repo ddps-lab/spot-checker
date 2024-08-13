@@ -31,8 +31,7 @@ FAILED_CODES = ["capacity-not-available",
                 "bad-parameters"]
 SUCCESS_CODE = ["pending-fulfillment",
                 "fulfilled"]
-
-
+DESCRIBE_RATE = int(os.environ['DESCRIBE_RATE'])
 
 def check_throttling(instance_type):
     instance_type  = instance_type.split('.')[0]
@@ -116,7 +115,7 @@ def test_spot_instance_available(instance_type, availability_zone, ddd_request_t
                     SpotInstanceRequestIds=[spot_request_id])
                 break
             except:
-                time.sleep(0.1)
+                time.sleep(DESCRIBE_RATE)
                 print("retry describe")
         print("finish describe")
         request = response['SpotInstanceRequests'][0]

@@ -12,7 +12,7 @@ resource "aws_lambda_function" "lambda" {
   function_name = "${var.prefix}-spot-availability-tester"
   architectures = ["x86_64"]
   memory_size   = 128
-  timeout       = 30
+  timeout       = 60
   runtime       = "python3.11"
   handler       = var.use_ec2 ? "spot-availability-tester-ec2.lambda_handler" : "spot-availability-tester.lambda_handler"
   filename      = "spot-availability-tester.zip"
@@ -29,6 +29,7 @@ resource "aws_lambda_function" "lambda" {
       LOG_GROUP_NAME    = var.log_group_name,
       LOG_STREAM_NAME   = var.log_stream_name,
       PREFIX = var.prefix
+      DESCRIBE_RATE = var.describe_rate
     }
   }
 }
