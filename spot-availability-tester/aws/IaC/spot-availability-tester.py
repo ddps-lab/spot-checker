@@ -31,7 +31,7 @@ FAILED_CODES = ["capacity-not-available",
                 "bad-parameters"]
 SUCCESS_CODE = ["pending-fulfillment",
                 "fulfilled"]
-DESCRIBE_RATE = int(os.environ['DESCRIBE_RATE'])
+DESCRIBE_RATE = float(os.environ['DESCRIBE_RATE'])
 
 def check_throttling(instance_type):
     instance_type  = instance_type.split('.')[0]
