@@ -38,6 +38,7 @@ module "spot-availability-tester" {
   log_stream_name = var.spot_log_stream_name
   lambda_rate = var.lambda_rate
   use_ec2 = var.use_ec2
+  describe_rate = var.describe_rate
 }
 
 module "tester-ec2" {

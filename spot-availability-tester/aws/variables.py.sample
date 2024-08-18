@@ -3,3 +3,4 @@ prefix = ""
 log_stream_name = ""
 use_ec2 = "false"
 spawn_rate = 1
+describe_rate = 0.1

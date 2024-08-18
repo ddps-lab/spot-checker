@@ -31,8 +31,7 @@ FAILED_CODES = ["capacity-not-available",
                 "bad-parameters"]
 SUCCESS_CODE = ["pending-fulfillment",
                 "fulfilled"]
-
-
+DESCRIBE_RATE = float(os.environ['DESCRIBE_RATE'])
 
 def check_throttling(instance_type):
     instance_type  = instance_type.split('.')[0]
@@ -107,6 +106,7 @@ def test_spot_instance_available(instance_type, availability_zone, ddd_request_t
     create_time = spot_request['SpotInstanceRequests'][0]['CreateTime']
     spot_request_id = spot_request['SpotInstanceRequests'][0]['SpotInstanceRequestId']
     global code
+    time.sleep(0.1)
     print("start describe")
     while True:
         response = ""
@@ -116,7 +116,7 @@ def test_spot_instance_available(instance_type, availability_zone, ddd_request_t
                     SpotInstanceRequestIds=[spot_request_id])
                 break
             except:
-                time.sleep(0.1)
+                time.sleep(DESCRIBE_RATE)
                 print("retry describe")
         print("finish describe")
         request = response['SpotInstanceRequests'][0]
@@ -131,12 +131,17 @@ def test_spot_instance_available(instance_type, availability_zone, ddd_request_t
             code = "success"
             break
         else:
-            time.sleep(0.1)
+            time.sleep(DESCRIBE_RATE)
 
     status_update_time = response['SpotInstanceRequests'][0]['Status']['UpdateTime']
-    cancel_spot_request = ec2.cancel_spot_instance_requests(
-        SpotInstanceRequestIds=[spot_request_id]
-    )
+    while True:
+        try:
+            cancel_spot_request = ec2.cancel_spot_instance_requests(
+            SpotInstanceRequestIds=[spot_request_id]) 
+            break
+        except:
+            time.sleep(1)
+            print("retry cancel")
 
     result = {
         "InstanceType": instance_type,
