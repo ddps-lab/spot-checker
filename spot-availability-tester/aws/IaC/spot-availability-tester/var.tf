@@ -9,3 +9,5 @@ variable "log_stream_name" {}
 variable "instance_types" {}
 variable "instance_types_az" {}
 variable "lambda_rate" {}
+variable "use_ec2" {}
+variable "describe_rate" {}

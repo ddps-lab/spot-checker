@@ -48,3 +48,13 @@ variable "lambda_rate" {
   type = string
   default = ""
 }
+
+variable "describe_rate" {
+  type = string
+  default = ""
+}
+
+variable "use_ec2" {
+  type = bool
+  default = false
+}

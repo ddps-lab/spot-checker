@@ -69,7 +69,7 @@ def create_log_event(result):
         logGroupName=LOG_GROUP_NAME, logStreamName=LOG_STREAM_NAME, logEvents=[log_event])
 
 
-def test_spot_instance_available(instance_type, availability_zone):
+def test_spot_instance_available(instance_type, availability_zone, ddd_request_time):
     global ami_id
     instance_family = str(instance_type.split(".")[0])
     if instance_family in ARM_INSTANCE_TYPES:
@@ -150,14 +150,17 @@ def test_spot_instance_available(instance_type, availability_zone):
         "Code": code,
         "RawCode": request['Status']['Code'],
         'RequestCreateTime': create_time.timestamp(),
-        'StatusUpdateTime': status_update_time.timestamp()
+        'StatusUpdateTime': status_update_time.timestamp(),
+        "DDDRequestTime": ddd_request_time
     }
     return result
 
 
 def lambda_handler(event, context):
-    if not check_throttling(event['instance_type']):
+    json_body = json.loads(event['body'])['inputs']
+
+    if not check_throttling(json_body['instance_type']):
         return "throttling"
-    result = test_spot_instance_available(event['instance_type'], event['availability_zone'])
+    result = test_spot_instance_available(json_body['instance_type'], json_body['availability_zone'], json_body['ddd_request_time'])
     create_log_event(json.dumps(result))
     return "finish"

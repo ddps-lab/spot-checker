@@ -9,10 +9,10 @@ from pathlib import Path
 import multiprocessing
 
 ### Spot Checker Mapping Data
-region_ami = pickle.load(open('./data/region_ami_dict.pkl', 'rb'))  # {x86/arm: {region: (ami-id, ami-info), ...}}
-az_map_dict = pickle.load(open('./data/az_map_dict.pkl', 'rb'))  # {(region, az-id): az-name, ...}
-arm64_family = ['a1', 't4g', 'c6g', 'c6gd', 'c6gn', 'im4gn', 'is4gen', 'm6g', 'm6gd', 'r6g', 'r6gd', 'x2gd']
-LOG_BCKET_NAME = '' # buckut name to save log
+region_ami = pickle.load(open('./data/region_ami_dict.pkl', 'rb')) # {x86/arm: {region: (ami-id, ami-info), ...}}
+az_map_dict = pickle.load(open('./data/az_map_dict.pkl', 'rb')) # {(region, az-id): az-name, ...}
+arm64_family = ['a1', 't4g', 'c6g', 'c6gd', 'c6gn', 'im4gn', 'is4gen', 'm6g', 'm6gd', 'm7g', 'm7gd', 'r6g', 'r6gd', 'r7g', 'r7gd', 'x2gd']
+LOG_BUCKET_NAME = 'spot-checker-data'
 
 ### Spot Checker Arguments
 parser = argparse.ArgumentParser(description='Spot Checker Workload Information')
