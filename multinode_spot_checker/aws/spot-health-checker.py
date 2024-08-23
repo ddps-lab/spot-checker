@@ -54,8 +54,7 @@ log_event=$(cat <<EOF
 EOF
 )
 aws logs put-log-events --log-group-name %s --log-stream-name %s --log-events "$log_event" --region %s
-sudo shutdown -P +%s
-""" % ("%s", region, region, log_group_name, log_stream_name, region, time_minutes)
+""" % ("%s", region, region, log_group_name, log_stream_name, region)
 
 userdata_encoded = base64.b64encode(userdata.encode()).decode()
 
