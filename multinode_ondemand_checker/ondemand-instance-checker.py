@@ -34,7 +34,7 @@ launch_time = launch_time.astimezone(pytz.UTC)
 stop_time = datetime.datetime.now() + datetime.timedelta(hours=time_hours, minutes=(time_minutes + wait_minutes))
 stop_time = stop_time.astimezone(pytz.UTC)
 
-
+# userdata includes the shutdown command.
 userdata = """#!/bin/bash
 current_time=$(date +%s)
 current_time_ms=$((current_time * 1000))
