@@ -84,26 +84,20 @@ def start_spot_checker(target_count):
     ### session & client
     session = boto3.session.Session(profile_name='default')
     ec2 = session.client('ec2', region_name=region)
-
-    create_request_response = ec2.request_spot_instances(
-        InstanceCount=target_count,
-        LaunchSpecification=launch_spec,
-        #     SpotPrice=spot_price, # default value for on-demand price
-        ValidFrom=launch_time,
-        ValidUntil=stop_time,
-        Type='persistent'  # not 'one-time', persistent request
-    )
-    siri_list = []
-    for rq in create_request_response['SpotInstanceRequests']:
-        siri_list.append(rq['SpotInstanceRequestId'])
-
-    spot_data_dict['create_requests'] = create_request_response
-    time.sleep(1)
-    return siri_list
+    for i in range(0, target_count):
+        create_request_response = ec2.request_spot_instances(
+            InstanceCount=1,
+            LaunchSpecification=launch_spec,
+            #     SpotPrice=spot_price, # default value for on-demand price
+            ValidFrom=launch_time,
+            ValidUntil=stop_time,
+            Type='persistent'  # not 'one-time', persistent request
+        )
+        time.sleep(0.1)
 
 
 
 if __name__ == "__main__":
     instance_count = variables.instance_count
     print(instance_count)
-    spot_instance_request_id_list = start_spot_checker(instance_count)
+    start_spot_checker(instance_count)
