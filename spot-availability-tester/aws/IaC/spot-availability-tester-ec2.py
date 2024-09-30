@@ -103,7 +103,6 @@ def test_spot_instance_available(instance_type, availability_zone, ddd_request_t
             },
             'UserData': user_data_encoded
         },
-        # ValidFrom=datetime.datetime.now(),
         ValidUntil=stop_time,
     )
 
