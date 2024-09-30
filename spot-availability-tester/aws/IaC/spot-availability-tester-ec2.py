@@ -3,7 +3,6 @@ import os
 import time
 import json
 import base64
-import pytz
 import datetime
 
 ec2 = boto3.client('ec2')
@@ -90,7 +89,7 @@ def test_spot_instance_available(instance_type, availability_zone, ddd_request_t
     shutdown -h now"""
     user_data_encoded = base64.b64encode(user_data.encode()).decode()
     stop_time = datetime.datetime.now() + datetime.timedelta(minutes=2)
-    stop_time = stop_time.astimezone(pytz.UTC)
+    stop_time = stop_time.astimezone(datetime.timezone.utc)
     spot_request = ec2.request_spot_instances(
         InstanceCount=1,
         Type='one-time',
@@ -104,6 +103,7 @@ def test_spot_instance_available(instance_type, availability_zone, ddd_request_t
             },
             'UserData': user_data_encoded
         },
+        # ValidFrom=datetime.datetime.now(),
         ValidUntil=stop_time,
     )
 
