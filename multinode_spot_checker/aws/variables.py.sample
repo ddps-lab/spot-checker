@@ -1,0 +1,19 @@
+# 클라우드 & CloudWatch정보
+awscli_profile = "default"
+prefix = "prefix"
+log_stream_name_chage_status = "change_status"
+log_stream_name_init_time = "init_time"
+
+# 인스턴스 정보
+instance_type = "t2.medium"
+region = "us-east-1"
+az_id = "use1-az1"
+# 생성할 인스턴스 수
+instance_count = 1
+
+# wait_minutes 분 후 스팟 요청 활성화 
+wait_minutes = 1 
+# 실험 시간
+time_hours = 0
+# 실험 분
+time_minutes = 10
