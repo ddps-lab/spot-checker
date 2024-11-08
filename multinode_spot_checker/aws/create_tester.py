@@ -39,6 +39,8 @@ def main():
     log_group_name = f"{prefix}-spot-checker-multinode-log"
     log_stream_name_chage_status = f"{variables.log_stream_name_chage_status}"
     log_stream_name_init_time = f"{variables.log_stream_name_init_time}"
+    experiment_size = f"{variables.instance_count}"
+
 
     tf_project_dir = "./IaC"
     session = boto3.Session(profile_name=awscli_profile, region_name=region)
@@ -50,7 +52,15 @@ def main():
     session = boto3.Session(profile_name=awscli_profile, region_name=region)
     run_command(["terraform", "workspace", "new", "spot-checker-multinode"])
     run_command(["terraform", "init"])
-    run_command(["terraform", "apply", "--parallelism=150", "--auto-approve", "--var", f"region={region}", "--var", f"prefix={prefix}","--var", f"awscli_profile={awscli_profile}", "--var", f"log_group_name={log_group_name}", "--var", f"log_stream_name_chage_status={log_stream_name_chage_status}", "--var", f"log_stream_name_init_time={log_stream_name_init_time}"])
+    run_command(["terraform", "apply", "--parallelism=150", "--auto-approve",
+                 "--var", f"region={region}", 
+                 "--var", f"prefix={prefix}",
+                 "--var", f"awscli_profile={awscli_profile}",
+                 "--var", f"log_group_name={log_group_name}", 
+                 "--var", f"log_stream_name_chage_status={log_stream_name_chage_status}", 
+                 "--var", f"log_stream_name_init_time={log_stream_name_init_time}",
+                 "--var", f"experiment_size={experiment_size}",
+                 ])
    
 if __name__ == "__main__":
     main()

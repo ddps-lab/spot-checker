@@ -34,6 +34,8 @@ def main():
     log_group_name = f"{prefix}-spot-availability-tester-log"
     log_stream_name_chage_status = f"{variables.log_stream_name_chage_status}"
     log_stream_name_init_time = f"{variables.log_stream_name_init_time}"
+    experiment_size = f"{variables.instance_count}"
+
     tf_project_dir = "./IaC"
 
     os.chdir(tf_project_dir)
@@ -45,7 +47,15 @@ def main():
 
 
     run_command(["terraform", "workspace", "select", "-or-create", "spot-checker-multinode"])
-    run_command(["terraform", "destroy", "--parallelism=150", "--auto-approve", "--var", f"region={region}", "--var", f"prefix={prefix}","--var", f"awscli_profile={awscli_profile}", "--var", f"log_group_name={log_group_name}", "--var", f"log_stream_name_chage_status={log_stream_name_chage_status}", "--var", f"log_stream_name_init_time={log_stream_name_init_time}"])
+    run_command(["terraform", "destroy", "--parallelism=150", "--auto-approve",
+                 "--var", f"region={region}",
+                 "--var", f"prefix={prefix}",
+                 "--var", f"awscli_profile={awscli_profile}",
+                 "--var", f"log_group_name={log_group_name}", 
+                 "--var", f"log_stream_name_chage_status={log_stream_name_chage_status}", 
+                 "--var", f"log_stream_name_init_time={log_stream_name_init_time}",
+                 "--var", f"experiment_size={experiment_size}",
+                 ])
     run_command(["terraform", "workspace", "select", "default"])
     run_command(["terraform", "workspace", "delete", "spot-checker-multinode"])
     delete_cloudwatch_log_group(f"/aws/lambda/{prefix}-spot-availability-tester", logs_client)

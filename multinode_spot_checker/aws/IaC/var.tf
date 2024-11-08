@@ -28,3 +28,7 @@ variable "log_stream_name_init_time" {
   type = string
   default = ""
 }
+variable "experiment_size" {
+  type = string
+  default = ""
+}
