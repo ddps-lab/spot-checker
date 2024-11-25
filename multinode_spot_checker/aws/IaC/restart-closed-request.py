@@ -20,8 +20,14 @@ def lambda_handler(event, context):
     )
 
     for request in response.get('SpotInstanceRequests', []):
+        # print(request)
         instance_type = request['LaunchSpecification']['InstanceType']
-        availability_zone = request['LaunchedAvailabilityZone']
+
+        try:
+            availability_zone = request['LaunchedAvailabilityZone']
+        except KeyError:
+            availability_zone = request['LaunchSpecification']['Placement']['AvailabilityZone']
+
         ami_id = request['LaunchSpecification']['ImageId']
         valid_until = request.get('ValidUntil')
 
