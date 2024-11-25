@@ -5,7 +5,7 @@ import time
 
 
 ec2_client = boto3.client('ec2')
-exp_size = int(os.getenv('EXP_SIZE', 10))
+exp_size = int(os.getenv('EXP_SIZE'))
 
 def lambda_handler(event, context):
     count_dict = defaultdict(int)
@@ -14,7 +14,8 @@ def lambda_handler(event, context):
 
     response = ec2_client.describe_spot_instance_requests(
         Filters=[
-            {'Name': 'state', 'Values': ['active']}, 
+            {'Name': 'state', 'Values': ['active', 'open']},
+            {'Name': 'type', 'Values': ['persistent']}
         ]
     )
 
@@ -28,10 +29,12 @@ def lambda_handler(event, context):
         ami_dict[instance_type] = ami_id
         valid_until_dict[instance_type] = valid_until
 
+    print(count_dict)
     for (instance_type, az), count in count_dict.items():
         if count < exp_size:
             requests_needed = exp_size - count
-            print(f"Adding {requests_needed} spot requests for {instance_type} in {az}")
+            print(f"{requests_needed} instance missing.")
+            print(f"Adding 1 spot requests for {instance_type} in {az}")
 
             ami_id = ami_dict.get(instance_type)
             valid_until = valid_until_dict.get(instance_type)
@@ -39,7 +42,8 @@ def lambda_handler(event, context):
             if not ami_id:
                 print(f"No AMI found for instance type {instance_type}. Skipping...")
 
-            for _ in range(requests_needed):
+            # for _ in range(requests_needed):
+            for _ in range(1):
                 ec2_client.request_spot_instances(
                     InstanceCount=1,
                     Type="persistent",
