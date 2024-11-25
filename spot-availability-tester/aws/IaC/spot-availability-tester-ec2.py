@@ -3,6 +3,7 @@ import os
 import time
 import json
 import base64
+import datetime
 
 ec2 = boto3.client('ec2')
 logs_client = boto3.client('logs')
@@ -88,6 +89,9 @@ def test_spot_instance_available(instance_type, availability_zone, ddd_request_t
     shutdown -h now"""
     user_data_encoded = base64.b64encode(user_data.encode()).decode()
 
+    stop_time = datetime.datetime.now() + datetime.timedelta(minutes=1)
+    stop_time = stop_time.astimezone(datetime.timezone.utc)
+
     spot_request = ec2.request_spot_instances(
         InstanceCount=1,
         Type='one-time',
@@ -101,14 +105,17 @@ def test_spot_instance_available(instance_type, availability_zone, ddd_request_t
             },
             'UserData': user_data_encoded
         },
+        ValidUntil=stop_time,
     )
 
     create_time = spot_request['SpotInstanceRequests'][0]['CreateTime']
     spot_request_id = spot_request['SpotInstanceRequests'][0]['SpotInstanceRequestId']
     global code
     time.sleep(0.1)
+    describe_count = 0
     print("start describe")
-    while True:
+    while describe_count < 10:
+        describe_count+=1
         response = ""
         while True:
             try:
@@ -132,6 +139,10 @@ def test_spot_instance_available(instance_type, availability_zone, ddd_request_t
             break
         else:
             time.sleep(DESCRIBE_RATE)
+    
+    if describe_count >= 10:
+        print("pending-evaluation lasted more than 10 seconds.")
+        code = "fail"
 
     status_update_time = response['SpotInstanceRequests'][0]['Status']['UpdateTime']
     while True:
