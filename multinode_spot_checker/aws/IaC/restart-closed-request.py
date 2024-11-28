@@ -19,6 +19,13 @@ def lambda_handler(event, context):
         ]
     )
 
+    closed_response = ec2_client.describe_spot_instance_requests(
+        Filters=[
+            {'Name': 'state', 'Values': ['closed', 'failed']},
+            {'Name': 'type', 'Values': ['persistent']}
+        ]
+    )
+
     for request in response.get('SpotInstanceRequests', []):
         # print(request)
         instance_type = request['LaunchSpecification']['InstanceType']
@@ -34,6 +41,26 @@ def lambda_handler(event, context):
         count_dict[(instance_type, availability_zone)] += 1
         ami_dict[instance_type] = ami_id
         valid_until_dict[instance_type] = valid_until
+
+    print(closed_response)
+    for request in closed_response.get('SpotInstanceRequests', []):
+        instance_type = request['LaunchSpecification']['InstanceType']
+
+        try:
+            availability_zone = request['LaunchedAvailabilityZone']
+        except KeyError:
+            availability_zone = request['LaunchSpecification']['Placement']['AvailabilityZone']
+
+        ami_id = request['LaunchSpecification']['ImageId']
+        valid_until = request.get('ValidUntil')
+
+        if (instance_type, availability_zone) in count_dict:
+            continue
+
+        count_dict[(instance_type, availability_zone)] = 0
+        ami_dict[instance_type] = ami_id
+        valid_until_dict[instance_type] = valid_until
+
 
     print(count_dict)
     for (instance_type, az), count in count_dict.items():

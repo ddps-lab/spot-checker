@@ -21,7 +21,9 @@ def lambda_handler(event, context):
     instances_to_terminate = []
     instances_to_terminate.append(event['detail']['instance-id'])
     response = ec2.describe_instances(
-        Filters=[{'Name': 'instance-lifecycle', 'Values': ['spot']}],
+        Filters=[{'Name': 'instance-lifecycle', 'Values': ['spot']},
+                 {'Name': 'type', 'Values': ['persistent']},
+                 ],
         InstanceIds=instances_to_terminate
     )
 
