@@ -1,6 +1,8 @@
 resource "aws_cloudwatch_log_group" "lambda-cloudwatch-log-group" {
   name = "/aws/lambda/${aws_lambda_function.lambda.function_name}"
   retention_in_days = 30
+
+  depends_on = [ aws_lambda_function.lambda ]
 }
 
 
