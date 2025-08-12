@@ -13,6 +13,7 @@ module "terminate-no-name-instances" {
   lambda_role_arn = aws_iam_role.terminate-no-name-instance-lambda-role.arn
   log_group_name = var.log_group_name
   log_stream_name = var.terminate_log_stream_name
+  layer_arn_list = ["arn:aws:lambda:us-west-2:786382940258:layer:boto3_1_40:2"]
 }
 
 module "terminate-pending-instances" {
@@ -22,6 +23,7 @@ module "terminate-pending-instances" {
   lambda_role_arn = aws_iam_role.terminate-pending-instance-lambda-role.arn
   log_group_name = var.log_group_name
   log_stream_name = var.pending_log_stream_name
+  layer_arn_list = ["arn:aws:lambda:us-west-2:786382940258:layer:boto3_1_40:2"]
 }
 
 module "spot-availability-tester" {
@@ -52,20 +54,3 @@ module "tester-ec2" {
   function_url = module.spot-availability-tester.function_url
 }
 
-module "quota-availability-updater" {
-  source = "./quota-availability-updater"
-  prefix = var.prefix
-  lambda_role_arn = aws_iam_role.quota-availability-updater-lambda-role.arn
-  region = var.region
-}
-
-resource "aws_dynamodb_table" "DDDCHECKTABLE" {
-  name           = "${var.prefix}-DDDCHECKTABLE"
-  billing_mode   = "PAY_PER_REQUEST"
-  hash_key       = "TABLE"
-
-  attribute {
-    name = "TABLE"
-    type = "N"  # string
-  }
-}

@@ -34,33 +34,6 @@ SUCCESS_CODE = ["pending-fulfillment",
                 "fulfilled"]
 DESCRIBE_RATE = float(os.environ['DESCRIBE_RATE'])
 
-def check_throttling(instance_type):
-    instance_type  = instance_type.split('.')[0]
-    if instance_type[:3] == 'trn':
-        instance_category = "TRN"
-    elif instance_type[:3] == 'inf':
-        instance_category = "INF"
-    elif instance_type[:2] == 'dl':
-        instance_category = "DL"
-    elif instance_type[:2] == 'vt':
-        instance_category = "G_VT"
-    elif instance_type[:1] == 'g':
-        instance_category = "G_VT"
-    elif instance_type[:1] == 'p':
-        if instance_type[1] == '5':
-            instance_category = "P5"
-        else:
-            instance_category = "P2_P3_P4"
-    elif instance_type[:1] == 'f':
-        instance_category = "F"
-    elif instance_type[:1] == 'x':
-        instance_category = "X"
-    else:
-        instance_category = "STANDARD"
-    response = dynamodb.get_item(TableName=f"{PREFIX}-DDDCHECKTABLE", Key={'TABLE':{'N':'1'}})['Item'][instance_category]['BOOL']
-    return response
-
-
 def create_log_event(result):
     log_event = {
         'timestamp': int(time.time() * 1000),
@@ -88,20 +61,28 @@ def test_spot_instance_available(instance_type, availability_zone, ddd_request_t
     user_data = """#!/bin/bash
     shutdown -h now"""
     user_data_encoded = base64.b64encode(user_data.encode()).decode()
-    stop_time = datetime.datetime.now() + datetime.timedelta(minutes=2)
+
+    stop_time = datetime.datetime.now() + datetime.timedelta(minutes=1)
     stop_time = stop_time.astimezone(datetime.timezone.utc)
+
     spot_request = ec2.request_spot_instances(
         InstanceCount=1,
         Type='one-time',
         LaunchSpecification={
             'ImageId': ami_id,
             'InstanceType': instance_type,
-            'SubnetId': SUBNET_IDS[SUBNET_AZ_NAMES.index(availability_zone)],
-            'SecurityGroupIds': SECURITY_GROUP_IDS,
             'Placement': {
                 "AvailabilityZone": availability_zone
             },
-            'UserData': user_data_encoded
+            'UserData': user_data_encoded,
+            'NetworkInterfaces': [
+                {
+                    'DeviceIndex': 0,
+                    'SubnetId': SUBNET_IDS[SUBNET_AZ_NAMES.index(availability_zone)],
+                    'AssociatePublicIpAddress': False,  # 퍼블릭 IP 비활성화
+                    'Groups': SECURITY_GROUP_IDS        # sg-... 형태의 ID 리스트
+                }
+            ]
         },
         ValidUntil=stop_time,
     )
@@ -110,8 +91,10 @@ def test_spot_instance_available(instance_type, availability_zone, ddd_request_t
     spot_request_id = spot_request['SpotInstanceRequests'][0]['SpotInstanceRequestId']
     global code
     time.sleep(0.1)
+    describe_count = 0
     print("start describe")
-    while True:
+    while describe_count < 10:
+        describe_count+=1
         response = ""
         while True:
             try:
@@ -135,6 +118,10 @@ def test_spot_instance_available(instance_type, availability_zone, ddd_request_t
             break
         else:
             time.sleep(DESCRIBE_RATE)
+    
+    if describe_count >= 10:
+        print("pending-evaluation lasted more than 10 seconds.")
+        code = "fail"
 
     status_update_time = response['SpotInstanceRequests'][0]['Status']['UpdateTime']
     while True:
@@ -162,8 +149,6 @@ def test_spot_instance_available(instance_type, availability_zone, ddd_request_t
 def lambda_handler(event, context):
     json_body = json.loads(event['body'])['inputs']
 
-    if not check_throttling(json_body['instance_type']):
-        return "throttling"
     result = test_spot_instance_available(json_body['instance_type'], json_body['availability_zone'], json_body['ddd_request_time'])
     create_log_event(json.dumps(result))
     return "finish"

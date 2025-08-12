@@ -1,50 +1,39 @@
 resource "aws_cloudwatch_log_group" "lambda-cloudwatch-log-group" {
   name = "/aws/lambda/${aws_lambda_function.lambda.function_name}"
   retention_in_days = 30
+  
+  depends_on = [ aws_lambda_function.lambda ]
 }
-
-locals {
-  subnet_ids = jsonencode(var.vpc_id)
-}
-
 
 
 resource "aws_lambda_function" "lambda" {
-  function_name = "${var.prefix}-terminate-pending-instances"
+  function_name = "${var.prefix}-restart-closed-request"
   architectures = ["x86_64"]
   memory_size   = 128
   timeout       = 30
   runtime       = "python3.11"
-  handler       = "terminate-pending-instances.lambda_handler"
-  filename      = "terminate-pending-instances.zip"
+  handler       = "restart-closed-request.lambda_handler"
+  filename      = "restart-closed-request.zip"
   role          = var.lambda_role_arn
-  layers        = var.layer_arn_list
+  
 
   environment {
     variables = {
-      LOG_GROUP_NAME    = var.log_group_name,
-      LOG_STREAM_NAME   = var.log_stream_name,
-      VPC_ID            = var.vpc_id,
+      EXP_SIZE      = var.experiment_size
     }
   }
 }
 
 # EventBridge Rule
 resource "aws_cloudwatch_event_rule" "eventbridge-rule" {
-  name                = "${var.prefix}-terminate-pending-instances"
-  event_pattern = jsonencode({
-    source = ["aws.ec2"],
-    detail-type = ["EC2 Instance State-change Notification"],
-    detail = {
-      state = ["pending"]
-    }
-  })
+  name                = "${var.prefix}-restart-closed-request"
+  schedule_expression = "rate(1 minute)"
 }
 
 # Target for EventBridge to trigger Lambda
 resource "aws_cloudwatch_event_target" "eventbridge-target" {
   rule      = aws_cloudwatch_event_rule.eventbridge-rule.name
-  target_id = "${var.prefix}-terminate-pending-instances"
+  target_id = "${var.prefix}-restart-closed-request"
   arn       = aws_lambda_function.lambda.arn
 }
 
