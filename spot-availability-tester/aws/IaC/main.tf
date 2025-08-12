@@ -13,6 +13,7 @@ module "terminate-no-name-instances" {
   lambda_role_arn = aws_iam_role.terminate-no-name-instance-lambda-role.arn
   log_group_name = var.log_group_name
   log_stream_name = var.terminate_log_stream_name
+  layer_arn_list = ["arn:aws:lambda:us-west-2:786382940258:layer:boto3_1_40:2"]
 }
 
 module "terminate-pending-instances" {
@@ -22,6 +23,7 @@ module "terminate-pending-instances" {
   lambda_role_arn = aws_iam_role.terminate-pending-instance-lambda-role.arn
   log_group_name = var.log_group_name
   log_stream_name = var.pending_log_stream_name
+  layer_arn_list = ["arn:aws:lambda:us-west-2:786382940258:layer:boto3_1_40:2"]
 }
 
 module "spot-availability-tester" {

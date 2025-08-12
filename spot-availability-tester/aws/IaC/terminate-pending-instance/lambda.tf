@@ -18,6 +18,7 @@ resource "aws_lambda_function" "lambda" {
   handler       = "terminate-pending-instances.lambda_handler"
   filename      = "terminate-pending-instances.zip"
   role          = var.lambda_role_arn
+  layers        = var.layer_arn_list
 
   environment {
     variables = {

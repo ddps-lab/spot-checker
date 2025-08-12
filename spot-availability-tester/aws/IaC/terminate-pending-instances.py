@@ -10,6 +10,8 @@ VPC_ID = os.environ['VPC_ID']
 ec2 = boto3.client('ec2')
 logs_client = boto3.client('logs')
 
+print(boto3.__version__)
+
 def create_log_event(result):
     log_event = {
         'timestamp': int(time.time() * 1000),
@@ -39,5 +41,7 @@ def lambda_handler(event, context):
         }
         create_log_event(json.dumps(log_data))
 
-        ec2.terminate_instances(InstanceIds=instances_to_terminate)
+        ec2.terminate_instances(InstanceIds=instances_to_terminate,
+                                Force=True,
+                                SkipOsShutdown=True)
         print(f"Terminated instances: {event['detail']['instance-id']}")

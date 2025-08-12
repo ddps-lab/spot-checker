@@ -58,7 +58,9 @@ def lambda_handler(event, context):
 
     # Terminate instances without a Name tag
     if instances_to_terminate:
-        ec2.terminate_instances(InstanceIds=instances_to_terminate)
+        ec2.terminate_instances(InstanceIds=instances_to_terminate,
+                                Force=True,
+                                SkipOsShutdown=True)
         print(f"Terminated instances: {', '.join(instances_to_terminate)}")
     else:
         print("No instances to terminate.")

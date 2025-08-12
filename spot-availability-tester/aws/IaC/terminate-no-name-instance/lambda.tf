@@ -16,6 +16,7 @@ resource "aws_lambda_function" "lambda" {
   handler       = "terminate-no-name-instances.lambda_handler"
   filename      = "terminate-no-name-instances.zip"
   role          = var.lambda_role_arn
+  layers        = var.layer_arn_list
 
   environment {
     variables = {
