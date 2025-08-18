@@ -6,6 +6,16 @@ module "vpc" {
   prefix = var.prefix
 }
 
+resource "aws_lambda_layer_version" "boto3_1_40" {
+  filename   = "${path.module}/boto3_1_40.zip"
+  layer_name = "boto3_1_40"
+  compatible_runtimes = ["python3.11"]
+  description = "boto3 1.40 layer"
+}
+
+# terminate-no-name-instances와 terminate-pending-instances 모듈에 layer_arn_list로 전달
+
+
 module "terminate-no-name-instances" {
   source = "./terminate-no-name-instance"
   prefix = var.prefix
@@ -13,7 +23,8 @@ module "terminate-no-name-instances" {
   lambda_role_arn = aws_iam_role.terminate-no-name-instance-lambda-role.arn
   log_group_name = var.log_group_name
   log_stream_name = var.terminate_log_stream_name
-  layer_arn_list = ["arn:aws:lambda:us-west-2:786382940258:layer:boto3_1_40:2"]
+  depends_on = [aws_lambda_layer_version.boto3_1_40]
+  layer_arn_list = [aws_lambda_layer_version.boto3_1_40.arn]
 }
 
 module "terminate-pending-instances" {
@@ -23,7 +34,8 @@ module "terminate-pending-instances" {
   lambda_role_arn = aws_iam_role.terminate-pending-instance-lambda-role.arn
   log_group_name = var.log_group_name
   log_stream_name = var.pending_log_stream_name
-  layer_arn_list = ["arn:aws:lambda:us-west-2:786382940258:layer:boto3_1_40:2"]
+  depends_on = [aws_lambda_layer_version.boto3_1_40]
+  layer_arn_list = [aws_lambda_layer_version.boto3_1_40.arn]
 }
 
 module "spot-availability-tester" {
