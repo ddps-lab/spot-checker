@@ -1,0 +1,43 @@
+# AWS 설정 (Lambda 배포용)
+awscli_profile = "default"
+prefix = "azure-multinode"
+region = "us-west-1"  # Lambda가 배포될 AWS 리전
+
+# Azure 인증 (Service Principal)
+# 생성 방법: az ad sp create-for-rbac --name "spot-multinode-checker" --role Contributor
+azure_subscription_id = "your-subscription-id"
+azure_client_id = "your-client-id"
+azure_client_secret = "your-client-secret"
+azure_tenant_id = "your-tenant-id"
+
+# CloudWatch Logs
+log_group_name = f"{prefix}-log"
+log_stream_name = "vm_status"
+
+# VM 설정 (리스트 형식)
+# 형식: "Tier,InstanceType,Location,Zone,Count"
+# 
+# Location 형식:
+#   - Display Name (권장): "US West 3", "Korea Central", "East US"
+#   - API Name: "westus3", "koreacentral", "eastus"
+#   - 두 형식 모두 사용 가능 (자동 변환됨)
+# 
+# Count: 해당 스펙으로 생성할 VM 개수
+# 
+# 예시:
+vm_specs = [
+    "Standard,E2_v4,US West 3,2,10",      # US West 3 Zone 2에 10개
+    "Standard,D2s_v3,Korea Central,1,5",  # Korea Central Zone 1에 5개
+]
+
+# 또는 API Name 사용:
+# vm_specs = [
+#     "Standard,E2_v4,westus3,2,10",
+#     "Standard,D2s_v3,koreacentral,1,5",
+# ]
+
+# 실험 시간 설정
+wait_minutes = 10       # 실험 시작 대기 시간 (분)
+time_hours = 24        # 실험 지속 시간 (시간)
+time_minutes = 0       # 실험 지속 시간 (분)
+
