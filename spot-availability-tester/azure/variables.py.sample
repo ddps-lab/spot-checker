@@ -1,0 +1,23 @@
+awscli_profile = ""
+prefix = ""
+log_stream_name = ""
+use_ec2 = "false"
+spawn_rate = 1
+describe_rate = 0.1
+
+# Azure Authentication (Service Principal)
+azure_subscription_id = ""
+azure_tenant_id = ""
+azure_client_id = ""
+azure_client_secret = ""
+
+# Azure Test Configuration
+# List of Azure regions to test (RG, VNet, Subnet created by Terraform; NICs by Python asyncio)
+# Example regions: "US West 2", "US East", "EU West", "AP Southeast"
+azure_test_regions = [
+    "US West 2",
+]
+
+# Number of NICs to create per region via Python asyncio (for parallel testing)
+# 각 region별로 동시에 테스트할 수 있는 최대 VM 개수
+azure_nic_pool_size = 50
