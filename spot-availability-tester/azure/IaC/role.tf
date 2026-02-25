@@ -165,3 +165,40 @@ resource "aws_iam_instance_profile" "tester-ec2-role-instance-profile" {
   name = "${var.prefix}-tester-ec2-role-${var.region}-instance-profile"
   role = aws_iam_role.tester-ec2-role.name
 }
+
+resource "aws_iam_role" "dispatcher-lambda-role" {
+  count = var.use_ec2 ? 0 : 1
+  name  = "${var.prefix}-spot-dispatcher-${var.region}-role"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Action = "sts:AssumeRole"
+      Effect = "Allow"
+      Principal = {
+        Service = "lambda.amazonaws.com"
+      }
+    }]
+  })
+}
+
+resource "aws_iam_role_policy_attachment" "dispatcher-lambda-basic-policy" {
+  count      = var.use_ec2 ? 0 : 1
+  role       = aws_iam_role.dispatcher-lambda-role[0].name
+  policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+}
+
+resource "aws_iam_role_policy" "dispatcher-lambda-invoke-policy" {
+  count = var.use_ec2 ? 0 : 1
+  name  = "${var.prefix}-dispatcher-invoke-worker-policy"
+  role  = aws_iam_role.dispatcher-lambda-role[0].id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect   = "Allow"
+      Action   = "lambda:InvokeFunction"
+      Resource = "*"
+    }]
+  })
+}

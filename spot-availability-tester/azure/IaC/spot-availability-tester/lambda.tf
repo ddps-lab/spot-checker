@@ -4,7 +4,7 @@ resource "aws_cloudwatch_log_group" "lambda-cloudwatch-log-group" {
 }
 
 locals {
-  subnet_ids = jsonencode(var.subnet_ids)
+  subnet_ids      = jsonencode(var.subnet_ids)
   subnet_az_names = jsonencode(var.subnet_az_names)
 }
 
@@ -14,7 +14,7 @@ resource "aws_lambda_function" "lambda" {
   memory_size   = 128
   timeout       = 60
   runtime       = "python3.11"
-  handler       = "spot-availability-tester-ec2.lambda_handler"  # Azure VM 테스트용 (고정)
+  handler       = "spot-availability-tester-ec2.lambda_handler" # Azure VM 테스트용 (고정)
   filename      = "spot-availability-tester.zip"
   role          = var.lambda_role_arn
   layers        = [var.azure_sdk_layer_arn]
@@ -28,65 +28,38 @@ resource "aws_lambda_function" "lambda" {
       SUBNET_IDS        = local.subnet_ids,
       SUBNET_AZ_NAMES   = local.subnet_az_names,
       SECURITY_GROUP_ID = var.security_group_id,
-      
+
       # CloudWatch Logs
-      LOG_GROUP_NAME    = var.log_group_name,
-      LOG_STREAM_NAME   = var.log_stream_name,
-      
+      LOG_GROUP_NAME  = var.log_group_name,
+      LOG_STREAM_NAME = var.log_stream_name,
+
       # 공통 설정
-      PREFIX            = var.prefix
-      DESCRIBE_RATE     = var.describe_rate
-      
+      PREFIX        = var.prefix
+      DESCRIBE_RATE = var.describe_rate
+
       # Azure 인증 정보
       AZURE_SUBSCRIPTION_ID = var.azure_subscription_id
       AZURE_TENANT_ID       = var.azure_tenant_id
       AZURE_CLIENT_ID       = var.azure_client_id
       AZURE_CLIENT_SECRET   = var.azure_client_secret
-      
+
       # Azure 리소스 설정
-      AZURE_NIC_POOL_SIZE   = var.azure_nic_pool_size_runtime
+      AZURE_NIC_POOL_SIZE = var.azure_nic_pool_size_runtime
     }
   }
 }
 
-# # EventBridge Rule
-resource "aws_cloudwatch_event_rule" "eventbridge-rule" {
-  count               = var.use_ec2 ? 0 : length(var.instance_types)
-  name                = "${var.prefix}-${var.instance_types[count.index]}-${var.instance_types_az[count.index]}-rule"
-  schedule_expression = var.lambda_rate
-  depends_on          = [aws_lambda_function.lambda]
-}
-
-# Target for EventBridge to trigger Lambda
-resource "aws_cloudwatch_event_target" "eventbridge-target" {
-  count     = var.use_ec2 ? 0 : length(var.instance_types)
-  rule      = aws_cloudwatch_event_rule.eventbridge-rule[count.index].name
-  target_id = "${var.prefix}-${var.instance_types[count.index]}-${var.instance_types_az[count.index]}-target"
-  input     = <<EOF
-{
-  "instance_type": "${var.instance_types[count.index]}",
-  "availability_zone": "${var.instance_types_az[count.index]}"
-}
-EOF
-  arn       = aws_lambda_function.lambda.arn
-}
-
-resource "aws_lambda_permission" "allow_cloudwatch_to_call_rw_fallout_retry_step_deletion_lambda" {
-  count         = var.use_ec2 ? 0 : length(var.instance_types)
-  statement_id  = "${replace(var.instance_types[count.index], ".", "_")}-${var.instance_types_az[count.index]}"
-  action        = "lambda:InvokeFunction"
-  function_name = aws_lambda_function.lambda.function_name
-  principal     = "events.amazonaws.com"
-  source_arn    = aws_cloudwatch_event_rule.eventbridge-rule[count.index].arn
-}
+# EventBridge Rule ×N is replaced by dispatcher module
+# When use_ec2 = false: dispatcher Lambda invokes this worker
+# When use_ec2 = true: EC2 invokes via Function URL
 
 resource "aws_lambda_function_url" "lambda-url" {
   function_name      = aws_lambda_function.lambda.function_name
   authorization_type = "NONE"
 
   cors {
-    allow_origins = [ "*" ]
-    allow_methods = [ "*" ]
-    allow_headers = [ "*" ]
+    allow_origins = ["*"]
+    allow_methods = ["*"]
+    allow_headers = ["*"]
   }
 }

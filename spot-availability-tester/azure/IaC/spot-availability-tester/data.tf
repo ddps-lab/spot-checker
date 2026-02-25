@@ -1,12 +1,12 @@
 data "archive_file" "lambda_source_code" {
   type        = "zip"
-  source_file = var.use_ec2 ? "spot-availability-tester-ec2.py" : "spot-availability-tester.py"
+  source_file = "spot-availability-tester-ec2.py"
   output_path = "spot-availability-tester.zip"
 }
 
 data "aws_ami" "amazonlinux_2_arm_ami" {
   most_recent = true
-  owners = ["amazon"]
+  owners      = ["amazon"]
 
   filter {
     name   = "architecture"
@@ -21,7 +21,7 @@ data "aws_ami" "amazonlinux_2_arm_ami" {
 
 data "aws_ami" "amazonlinux_2_x86_ami" {
   most_recent = true
-  owners = ["amazon"]
+  owners      = ["amazon"]
 
   filter {
     name   = "architecture"
