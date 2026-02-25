@@ -23,12 +23,18 @@ def main():
     log_group_name = f"{prefix}-spot-checker-multinode-log"
 
     tf_project_dir = "./IaC-cloudwatchlogs"
-    
     os.chdir(tf_project_dir)
     
-    run_command(["terraform", "workspace", "new", "spot-checker-multinode"])
-    run_command(["terraform", "init"])
-    run_command(["terraform", "apply", "--auto-approve", "--var", f"region={region}", "--var", f"prefix={prefix}","--var", f"awscli_profile={awscli_profile}", "--var", f"log_group_name={log_group_name}"])
+    if type(region)==type(list()):
+        for r in region:
+            run_command(["terraform", "workspace", "new", f"{r}-spot-checker-multinode"])
+            run_command(["terraform", "init"])
+            run_command(["terraform", "apply", "--auto-approve", "--var", f"region={r}", "--var", f"prefix={prefix}","--var", f"awscli_profile={awscli_profile}", "--var", f"log_group_name={log_group_name}"])
+
+    else:
+        run_command(["terraform", "workspace", "new", "spot-checker-multinode"])
+        run_command(["terraform", "init"])
+        run_command(["terraform", "apply", "--auto-approve", "--var", f"region={region}", "--var", f"prefix={prefix}","--var", f"awscli_profile={awscli_profile}", "--var", f"log_group_name={log_group_name}"])
 
 
 if __name__ == "__main__":

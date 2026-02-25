@@ -21,19 +21,22 @@ def lambda_handler(event, context):
     instances_to_terminate = []
     instances_to_terminate.append(event['detail']['instance-id'])
     response = ec2.describe_instances(
-        Filters=[{'Name': 'instance-lifecycle', 'Values': ['spot']},
-                 {'Name': 'type', 'Values': ['persistent']},
-                 ],
+        Filters=[{'Name': 'instance-lifecycle', 'Values': ['spot']}],
         InstanceIds=instances_to_terminate
     )
 
     if not response['Reservations']:
         return
-    print(event)
+    # print(event)
     spot_request_id = response['Reservations'][0]['Instances'][0]['SpotInstanceRequestId']
     az = response['Reservations'][0]['Instances'][0]['Placement']['AvailabilityZone']
     instance_type = response['Reservations'][0]['Instances'][0]['InstanceType']
     request_describe = ec2.describe_spot_instance_requests(SpotInstanceRequestIds=[spot_request_id])
+    
+    print(request_describe['SpotInstanceRequests'][0]['Type'])
+    if request_describe['SpotInstanceRequests'][0]['Type'] == "one-time":
+        return 0
+
     status = request_describe['SpotInstanceRequests'][0]['Status']
     code = status['Code']
     message = status['Message']

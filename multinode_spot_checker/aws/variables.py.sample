@@ -4,7 +4,11 @@ prefix = "prefix"
 log_stream_name_chage_status = "change_status"
 log_stream_name_init_time = "init_time"
 
-# 인스턴스 정보
+# test_data 디렉토리 경로 (spot-availability-tester와 동일한 CSV 양식)
+# CSV 파일명이 리전명이 됨 (예: us-east-1.csv → region = "us-east-1")
+test_data_dir = "./test_data"
+
+# 인스턴스 정보 (spot-health-checker.py 단독 실행 시 사용)
 instance_type = "t2.medium"
 region = "us-east-1"
 az_id = "use1-az1"

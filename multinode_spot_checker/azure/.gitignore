@@ -1,0 +1,40 @@
+# Variables
+variables.py
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+# Virtual Environment
+venv/
+env/
+ENV/
+
+# Terraform
+IaC/.terraform/
+IaC/*.tfstate
+IaC/*.tfstate.*
+IaC/*.tfvars
+IaC/.terraform.lock.hcl
+IaC/terraform.tfstate.d/
+IaC/*.zip
+
+# Results
+result_data/
+
+# Logs
+*.log
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
