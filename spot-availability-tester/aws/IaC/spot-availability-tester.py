@@ -7,7 +7,7 @@ import datetime
 
 ec2 = boto3.client("ec2")
 logs_client = boto3.client("logs")
-dynamodb = boto3.client("dynamodb")
+
 
 ARM_INSTANCE_TYPES = [
     "a1",
