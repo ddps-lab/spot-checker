@@ -17,9 +17,10 @@ prefix = variables.prefix
 instance_type = variables.instance_type
 region = variables.region
 az_id = variables.az_id
+iam_instance_profile_arn = variables.iam_instance_profile_arn
 
 wait_minutes = variables.wait_minutes
-time_minutes = variables.time_minutes 
+time_minutes = variables.time_minutes
 time_hours = variables.time_hours
 
 instance_family = instance_type.split('.')[0]
@@ -66,7 +67,7 @@ launch_spec = {
     'InstanceType': instance_type,
     'Placement': {'AvailabilityZone': az_name},
     'IamInstanceProfile': {
-            'Arn': 'arn:aws:iam::741926482963:instance-profile/EC2toEC2_CW' # IAM ARN for CloudWatch access
+            'Arn': iam_instance_profile_arn
         },
     # 'UserData': userdata_encoded,
 }
@@ -88,7 +89,7 @@ spot_data_dict['end_time'] = stop_time
 
 ### Start Spot Checker
 def start_spot_checker(target_count):
-    for i in range(0, target_count):
+    for i in range(target_count):
         create_request_response = ec2.request_spot_instances(
             InstanceCount=1,
             LaunchSpecification=launch_spec,

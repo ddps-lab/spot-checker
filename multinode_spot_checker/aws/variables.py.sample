@@ -3,6 +3,10 @@ awscli_profile = "default"
 prefix = "prefix"
 log_stream_name_chage_status = "change_status"
 log_stream_name_init_time = "init_time"
+log_stream_name_rebalance = "rebalance_recommendation"
+log_stream_name_interruption = "spot_interruption_warning"
+log_stream_name_count = "instance_count"
+log_stream_name_placement_failed = "placement_failed"
 
 # test_data 디렉토리 경로 (spot-availability-tester와 동일한 CSV 양식)
 # CSV 파일명이 리전명이 됨 (예: us-east-1.csv → region = "us-east-1")
@@ -15,9 +19,13 @@ az_id = "use1-az1"
 # 생성할 인스턴스 수
 instance_count = 1
 
-# wait_minutes 분 후 스팟 요청 활성화 
-wait_minutes = 1 
+# wait_minutes 분 후 스팟 요청 활성화
+wait_minutes = 1
 # 실험 시간
 time_hours = 0
 # 실험 분
 time_minutes = 10
+# log-instance-count Lambda 실행 주기 (분)
+count_interval_minutes = 1
+# placement 실패를 기록할 최근 시간 윈도우 (분)
+recent_window_minutes = 10

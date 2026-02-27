@@ -67,3 +67,87 @@ resource "aws_iam_role_policy" "restart-closed-request-lambda_passrole_policy" {
     ]
   })
 }
+
+# ===== get-spot-rebalance Lambda Role =====
+resource "aws_iam_role" "get-spot-rebalance-lambda-role" {
+  name = "${var.prefix}-get-spot-rebalance-${var.region}-role"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Action = "sts:AssumeRole"
+      Effect = "Allow"
+      Sid    = ""
+      Principal = {
+        Service = "lambda.amazonaws.com"
+      }
+      }
+    ]
+  })
+}
+
+resource "aws_iam_role_policy_attachment" "get-spot-rebalance-lambda_basic_policy" {
+  role       = aws_iam_role.get-spot-rebalance-lambda-role.name
+  policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+}
+
+resource "aws_iam_role_policy_attachment" "get-spot-rebalance-lambda_EC2_policy" {
+  role       = aws_iam_role.get-spot-rebalance-lambda-role.name
+  policy_arn = "arn:aws:iam::aws:policy/AmazonEC2FullAccess"
+}
+
+# ===== get-spot-interruption Lambda Role =====
+resource "aws_iam_role" "get-spot-interruption-lambda-role" {
+  name = "${var.prefix}-get-spot-interruption-${var.region}-role"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Action = "sts:AssumeRole"
+      Effect = "Allow"
+      Sid    = ""
+      Principal = {
+        Service = "lambda.amazonaws.com"
+      }
+      }
+    ]
+  })
+}
+
+resource "aws_iam_role_policy_attachment" "get-spot-interruption-lambda_basic_policy" {
+  role       = aws_iam_role.get-spot-interruption-lambda-role.name
+  policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+}
+
+resource "aws_iam_role_policy_attachment" "get-spot-interruption-lambda_EC2_policy" {
+  role       = aws_iam_role.get-spot-interruption-lambda-role.name
+  policy_arn = "arn:aws:iam::aws:policy/AmazonEC2FullAccess"
+}
+
+# ===== log-instance-count Lambda Role =====
+resource "aws_iam_role" "log-instance-count-lambda-role" {
+  name = "${var.prefix}-log-instance-count-${var.region}-role"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Action = "sts:AssumeRole"
+      Effect = "Allow"
+      Sid    = ""
+      Principal = {
+        Service = "lambda.amazonaws.com"
+      }
+      }
+    ]
+  })
+}
+
+resource "aws_iam_role_policy_attachment" "log-instance-count-lambda_basic_policy" {
+  role       = aws_iam_role.log-instance-count-lambda-role.name
+  policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+}
+
+resource "aws_iam_role_policy_attachment" "log-instance-count-lambda_EC2_policy" {
+  role       = aws_iam_role.log-instance-count-lambda-role.name
+  policy_arn = "arn:aws:iam::aws:policy/AmazonEC2FullAccess"
+}

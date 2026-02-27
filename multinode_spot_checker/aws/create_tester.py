@@ -37,9 +37,15 @@ def main():
     prefix = variables.prefix
     region = variables.region
     log_group_name = f"{prefix}-spot-checker-multinode-log"
-    log_stream_name_chage_status = f"{variables.log_stream_name_chage_status}"
+    log_stream_name_change_status = f"{variables.log_stream_name_change_status}"
     log_stream_name_init_time = f"{variables.log_stream_name_init_time}"
+    log_stream_name_rebalance = f"{variables.log_stream_name_rebalance}"
+    log_stream_name_interruption = f"{variables.log_stream_name_interruption}"
+    log_stream_name_count = f"{variables.log_stream_name_count}"
+    log_stream_name_placement_failed = f"{variables.log_stream_name_placement_failed}"
     experiment_size = f"{variables.instance_count}"
+    count_interval_minutes = f"{variables.count_interval_minutes}"
+    recent_window_minutes = f"{variables.recent_window_minutes}"
 
     if type(region)==type(list()):
         tf_project_dir = "./IaC"
@@ -47,40 +53,60 @@ def main():
         for r in region:
             session = boto3.Session(profile_name=awscli_profile, region_name=r)
             logs_client = session.client('logs')
-            create_log_stream(log_group_name, log_stream_name_chage_status, logs_client)
+            create_log_stream(log_group_name, log_stream_name_change_status, logs_client)
             create_log_stream(log_group_name, log_stream_name_init_time, logs_client)
+            create_log_stream(log_group_name, log_stream_name_rebalance, logs_client)
+            create_log_stream(log_group_name, log_stream_name_interruption, logs_client)
+            create_log_stream(log_group_name, log_stream_name_count, logs_client)
+            create_log_stream(log_group_name, log_stream_name_placement_failed, logs_client)
 
             session = boto3.Session(profile_name=awscli_profile, region_name=r)
-            run_command(["terraform", "workspace", "new", f"{r}-spot-checker-multinode"])
+            run_command(["terraform", "workspace", "select", "-or-create", f"{r}-spot-checker-multinode"])
             run_command(["terraform", "init"])
             run_command(["terraform", "apply", "--parallelism=150", "--auto-approve",
-                        "--var", f"region={r}", 
+                        "--var", f"region={r}",
                         "--var", f"prefix={prefix}",
                         "--var", f"awscli_profile={awscli_profile}",
-                        "--var", f"log_group_name={log_group_name}", 
-                        "--var", f"log_stream_name_chage_status={log_stream_name_chage_status}", 
+                        "--var", f"log_group_name={log_group_name}",
+                        "--var", f"log_stream_name_chage_status={log_stream_name_change_status}",
                         "--var", f"log_stream_name_init_time={log_stream_name_init_time}",
+                        "--var", f"log_stream_name_rebalance={log_stream_name_rebalance}",
+                        "--var", f"log_stream_name_interruption={log_stream_name_interruption}",
+                        "--var", f"log_stream_name_count={log_stream_name_count}",
+                        "--var", f"log_stream_name_placement_failed={log_stream_name_placement_failed}",
                         "--var", f"experiment_size={experiment_size}",
+                        "--var", f"count_interval_minutes={count_interval_minutes}",
+                        "--var", f"recent_window_minutes={recent_window_minutes}",
                         ])
     else:
         tf_project_dir = "./IaC"
         session = boto3.Session(profile_name=awscli_profile, region_name=region)
         logs_client = session.client('logs')
-        create_log_stream(log_group_name, log_stream_name_chage_status, logs_client)
+        create_log_stream(log_group_name, log_stream_name_change_status, logs_client)
         create_log_stream(log_group_name, log_stream_name_init_time, logs_client)
+        create_log_stream(log_group_name, log_stream_name_rebalance, logs_client)
+        create_log_stream(log_group_name, log_stream_name_interruption, logs_client)
+        create_log_stream(log_group_name, log_stream_name_count, logs_client)
+        create_log_stream(log_group_name, log_stream_name_placement_failed, logs_client)
         os.chdir(tf_project_dir)
 
         session = boto3.Session(profile_name=awscli_profile, region_name=region)
-        run_command(["terraform", "workspace", "new", "spot-checker-multinode"])
+        run_command(["terraform", "workspace", "select", "-or-create", "spot-checker-multinode"])
         run_command(["terraform", "init"])
         run_command(["terraform", "apply", "--parallelism=150", "--auto-approve",
-                    "--var", f"region={region}", 
+                    "--var", f"region={region}",
                     "--var", f"prefix={prefix}",
                     "--var", f"awscli_profile={awscli_profile}",
-                    "--var", f"log_group_name={log_group_name}", 
-                    "--var", f"log_stream_name_chage_status={log_stream_name_chage_status}", 
+                    "--var", f"log_group_name={log_group_name}",
+                    "--var", f"log_stream_name_chage_status={log_stream_name_change_status}",
                     "--var", f"log_stream_name_init_time={log_stream_name_init_time}",
+                    "--var", f"log_stream_name_rebalance={log_stream_name_rebalance}",
+                    "--var", f"log_stream_name_interruption={log_stream_name_interruption}",
+                    "--var", f"log_stream_name_count={log_stream_name_count}",
+                    "--var", f"log_stream_name_placement_failed={log_stream_name_placement_failed}",
                     "--var", f"experiment_size={experiment_size}",
+                    "--var", f"count_interval_minutes={count_interval_minutes}",
+                    "--var", f"recent_window_minutes={recent_window_minutes}",
                     ])
    
 if __name__ == "__main__":
