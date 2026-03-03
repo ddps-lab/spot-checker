@@ -14,6 +14,7 @@ resource "aws_lambda_function" "lambda" {
   runtime       = "python3.11"
   handler       = "get-spot-interruption.lambda_handler"
   filename      = "get-spot-interruption.zip"
+  source_code_hash = filebase64sha256("get-spot-interruption.zip")
   role          = var.lambda_role_arn
 
   environment {

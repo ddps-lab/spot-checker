@@ -14,6 +14,7 @@ resource "aws_lambda_function" "lambda" {
   runtime       = "python3.11"
   handler       = "get-spot-rebalance.lambda_handler"
   filename      = "get-spot-rebalance.zip"
+  source_code_hash = filebase64sha256("get-spot-rebalance.zip")
   role          = var.lambda_role_arn
 
   environment {

@@ -5,6 +5,7 @@ import pickle
 import datetime
 import base64
 import variables
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 ### Spot Checker Mapping Data
 region_ami = pickle.load(open('./ami_az_data/region_ami_dict.pkl', 'rb'))  # {x86/arm: {region: (ami-id, ami-info), ...}}
@@ -95,49 +96,58 @@ def start_spot_checker(ec2, launch_spec, target_count):
 
     # Poll until instances are created
     instance_ids = []
-    max_retries = 30
+    max_retries = 180
     retry_count = 0
 
+    print(f"Polling for instances (max {max_retries}s)...")
     while len(instance_ids) < target_count and retry_count < max_retries:
         response = ec2.describe_spot_instance_requests(SpotInstanceRequestIds=spot_request_ids)
 
         for req in response['SpotInstanceRequests']:
+            state = req.get('Status', {}).get('Code', 'unknown')
             if 'InstanceId' in req and req['InstanceId'] not in instance_ids:
                 instance_ids.append(req['InstanceId'])
+                print(f"  Instance found: {req['InstanceId']} (state: {state})")
+            elif retry_count % 30 == 0:  # Log status every 30s
+                print(f"  Request {req['SpotInstanceRequestId']}: state={state}, instances={len(instance_ids)}/{target_count}")
 
         if len(instance_ids) < target_count:
             time.sleep(1)
             retry_count += 1
 
+    print(f"Polling complete: found {len(instance_ids)}/{target_count} instances after {retry_count}s")
+
     # Apply tags to actual EC2 instances
     if instance_ids:
-        ec2.create_tags(
-            Resources=instance_ids,
-            Tags=[
-                {'Key': 'Project', 'Value': 'spot-checker-multinode'},
-                {'Key': 'Environment', 'Value': f'{prefix}-spot-test'}
-            ]
-        )
-        print(f"Tags applied to instances: {instance_ids}")
+        try:
+            ec2.create_tags(
+                Resources=instance_ids,
+                Tags=[
+                    {'Key': 'Project', 'Value': 'spot-checker-multinode'},
+                    {'Key': 'Environment', 'Value': f'{prefix}-spot-test'}
+                ]
+            )
+            print(f"✓ Tags applied to instances: {instance_ids}")
+        except Exception as e:
+            print(f"✗ Error applying tags: {e}")
+    else:
+        print(f"✗ No instances found after {max_retries}s. Spot requests may still be pending.")
 
-if __name__ == "__main__":
-    instance_count = variables.instance_count
-    print(f"Target instance count per AZ: {instance_count}")
-    
-    for r, a in zip(regions, az_ids):
-        az_name_mapped = az_map_dict[(r, a)]
-        ami_id_mapped = region_ami[instance_arch][r][0]
-        
-        launch_spec = {
-            'ImageId': ami_id_mapped,
-            'InstanceType': instance_type,
-            'Placement': {'AvailabilityZone': az_name_mapped},
-            'IamInstanceProfile': {
-                'Arn': iam_instance_profile_arn
-            },
-        }
-        
-        print(f"""\n--- Launching in {r} ---
+def launch_in_region(r, a, instance_count):
+    """Launch Spot instances in a specific region (to be executed in parallel)."""
+    az_name_mapped = az_map_dict[(r, a)]
+    ami_id_mapped = region_ami[instance_arch][r][0]
+
+    launch_spec = {
+        'ImageId': ami_id_mapped,
+        'InstanceType': instance_type,
+        'Placement': {'AvailabilityZone': az_name_mapped},
+        'IamInstanceProfile': {
+            'Arn': iam_instance_profile_arn
+        },
+    }
+
+    print(f"""\n--- Launching in {r} ---
             Instance Type: {instance_type}
             Instance Family: {instance_family}
             Instance Architecture: {instance_arch}
@@ -145,7 +155,28 @@ if __name__ == "__main__":
             AZ-ID: {a}
             AZ-Name:{az_name_mapped}
             AMI ID: {ami_id_mapped}"""
-        )
+    )
 
-        ec2 = session.client('ec2', region_name=r)
-        start_spot_checker(ec2, launch_spec, instance_count)
+    ec2 = session.client('ec2', region_name=r)
+    start_spot_checker(ec2, launch_spec, instance_count)
+
+
+if __name__ == "__main__":
+    instance_count = variables.instance_count
+    print(f"Target instance count per AZ: {instance_count}")
+    print(f"Launching in {len(regions)} region(s) in parallel...\n")
+
+    # boto3는 병렬 스레드로 수행해도 safe
+    with ThreadPoolExecutor(max_workers=len(regions)) as executor:
+        futures = [
+            executor.submit(launch_in_region, r, a, instance_count)
+            for r, a in zip(regions, az_ids)
+        ]
+
+        for future in as_completed(futures):
+            try:
+                future.result()
+            except Exception as e:
+                print(f"Error in region launch: {e}")
+
+    print("\n✓ All regions completed")

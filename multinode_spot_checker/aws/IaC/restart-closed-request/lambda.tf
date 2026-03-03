@@ -14,6 +14,7 @@ resource "aws_lambda_function" "lambda" {
   runtime       = "python3.11"
   handler       = "restart-closed-request.lambda_handler"
   filename      = "restart-closed-request.zip"
+  source_code_hash = filebase64sha256("restart-closed-request.zip")
   role          = var.lambda_role_arn
   
 

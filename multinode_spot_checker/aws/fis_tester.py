@@ -48,6 +48,7 @@ import subprocess
 import os
 from datetime import datetime, timedelta
 from typing import List, Dict, Any, Optional
+from concurrent.futures import ThreadPoolExecutor, as_completed
 import boto3
 
 import variables
@@ -101,7 +102,7 @@ class FISTester:
             return []
 
     def get_spot_instances(self) -> List[str]:
-        """Spot Instance ID 목록 조회"""
+        """Spot Instance ID 목록 조회 (running 상태만)"""
         try:
             response = self.ec2_client.describe_instances(
                 Filters=[
@@ -128,6 +129,32 @@ class FISTester:
             return instance_ids
         except Exception as e:
             print(f"Error getting spot instances: {e}")
+            return []
+
+    def get_stopped_test_instances(self) -> List[str]:
+        """중단된 테스트 인스턴스 ID 목록 조회 (running + stopped)"""
+        try:
+            response = self.ec2_client.describe_instances(
+                Filters=[
+                    {
+                        'Name': 'instance-state-name',
+                        'Values': ['running', 'stopped']
+                    },
+                    {
+                        'Name': 'tag:Environment',
+                        'Values': [f'{self.prefix}-spot-test']
+                    }
+                ]
+            )
+
+            instance_ids = []
+            for reservation in response.get('Reservations', []):
+                for instance in reservation.get('Instances', []):
+                    instance_ids.append(instance['InstanceId'])
+
+            return instance_ids
+        except Exception as e:
+            print(f"Error getting stopped test instances: {e}")
             return []
 
     def tag_spot_instances(self):
@@ -217,6 +244,28 @@ class FISTester:
                 print(f"Experiment {experiment_id} status: {state}")
 
                 if state in ['completed', 'failed', 'stopped']:
+                    if state == 'failed':
+                        # 실패 원인 출력
+                        print(f"\n✗ Experiment {experiment_id} failed")
+                        state_reason = experiment.get('state', {}).get('reason', 'Unknown reason')
+                        print(f"  Reason: {state_reason}")
+
+                        # 실험 타겟 정보 출력
+                        targets = experiment.get('targets', {})
+                        if targets:
+                            print(f"  Targets:")
+                            for target_name, target_info in targets.items():
+                                print(f"    - {target_name}: {target_info}")
+
+                        # 실험 액션 정보 출력
+                        actions = experiment.get('actions', {})
+                        if actions:
+                            print(f"  Actions:")
+                            for action_name, action_info in actions.items():
+                                print(f"    - {action_name}: {action_info}")
+                    elif state == 'completed':
+                        print(f"✓ Experiment {experiment_id} completed successfully")
+
                     return state == 'completed'
 
                 time.sleep(5)
@@ -228,8 +277,8 @@ class FISTester:
         return False
 
     def start_stopped_instances(self):
-        """중단된 EC2 인스턴스를 다시 시작"""
-        instance_ids = self.get_spot_instances()
+        """중단된 테스트 인스턴스를 다시 시작 (running + stopped 포함)"""
+        instance_ids = self.get_stopped_test_instances()
 
         if not instance_ids:
             print("No instances to start")
@@ -246,194 +295,103 @@ class FISTester:
             print(f"Error starting instances: {e}")
             return False
 
-    def collect_logs(self,
-                    log_group_name: str,
-                    start_time: Optional[datetime] = None,
-                    end_time: Optional[datetime] = None) -> Dict[str, List[Dict]]:
-        """CloudWatch Logs에서 테스트 결과 수집"""
 
-        if start_time is None:
-            start_time = datetime.now() - timedelta(hours=1)
-        if end_time is None:
-            end_time = datetime.now()
 
-        start_ms = int(start_time.timestamp() * 1000)
-        end_ms = int(end_time.timestamp() * 1000)
+def setup_experiment(r: str, exp_name: str, exp_config: Dict) -> bool:
+    """Setup FIS experiment template in a specific region."""
+    import tempfile
 
-        results = {}
+    tester = FISTester(
+        profile=variables.awscli_profile,
+        region=r,
+        prefix=variables.prefix
+    )
 
-        try:
-            # 로그 그룹의 모든 스트림 조회
-            response = self.logs_client.describe_log_streams(
-                logGroupName=log_group_name
-            )
+    account_id = tester._get_account_id()
+    iam_role_arn = f"arn:aws:iam::{account_id}:role/{variables.prefix}-fis-role-{r}"
 
-            log_streams = response.get('logStreams', [])
+    print(f"[{r}] Creating FIS experiment: {variables.prefix}-{exp_name}")
 
-            for stream in log_streams:
-                stream_name = stream['logStreamName']
-                results[stream_name] = self._get_log_events(
-                    log_group_name,
-                    stream_name,
-                    start_ms,
-                    end_ms
-                )
-
-            return results
-        except Exception as e:
-            print(f"Error collecting logs: {e}")
-            return {}
-
-    def _get_log_events(self,
-                       log_group_name: str,
-                       log_stream_name: str,
-                       start_time_ms: int,
-                       end_time_ms: int) -> List[Dict]:
-        """특정 로그 스트림에서 이벤트 수집"""
-
-        events = []
-
-        try:
-            response = self.logs_client.filter_log_events(
-                logGroupName=log_group_name,
-                logStreamNamePrefix=log_stream_name,
-                startTime=start_time_ms,
-                endTime=end_time_ms
-            )
-
-            for event in response.get('events', []):
-                try:
-                    message = json.loads(event['message'])
-                except json.JSONDecodeError:
-                    message = event['message']
-
-                events.append({
-                    'timestamp': datetime.fromtimestamp(event['timestamp'] / 1000),
-                    'message': message
-                })
-
-            return events
-        except Exception as e:
-            print(f"Error getting log events from {log_stream_name}: {e}")
-            return []
-
-    def get_lambda_metrics(self,
-                          function_names: List[str],
-                          start_time: Optional[datetime] = None,
-                          end_time: Optional[datetime] = None) -> Dict[str, Dict]:
-        """Lambda 함수의 CloudWatch 메트릭 조회"""
-
-        if start_time is None:
-            start_time = datetime.now() - timedelta(hours=1)
-        if end_time is None:
-            end_time = datetime.now()
-
-        metrics = {}
-
-        for func_name in function_names:
-            metrics[func_name] = {
-                'invocations': self._get_metric_stats(
-                    func_name, 'Invocations', start_time, end_time
-                ),
-                'errors': self._get_metric_stats(
-                    func_name, 'Errors', start_time, end_time
-                ),
-                'duration': self._get_metric_stats(
-                    func_name, 'Duration', start_time, end_time
-                )
-            }
-
-        return metrics
-
-    def _get_metric_stats(self,
-                         function_name: str,
-                         metric_name: str,
-                         start_time: datetime,
-                         end_time: datetime) -> Dict[str, Any]:
-        """CloudWatch 메트릭 통계 조회"""
-
-        try:
-            response = self.cloudwatch_client.get_metric_statistics(
-                Namespace='AWS/Lambda',
-                MetricName=metric_name,
-                Dimensions=[
-                    {
-                        'Name': 'FunctionName',
-                        'Value': function_name
+    with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False) as f:
+        if exp_name in ['spot-rebalance', 'spot-interruption']:
+            # Spot-only actions (send-spot-instance-interruptions)
+            targets = {
+                'SpotInstances-Target': {
+                    'resourceType': 'aws:ec2:spot-instance',
+                    'selectionMode': 'ALL',
+                    'resourceTags': {
+                        'Environment': f'{variables.prefix}-spot-test'
                     }
-                ],
-                StartTime=start_time,
-                EndTime=end_time,
-                Period=60,
-                Statistics=['Sum', 'Average', 'Maximum']
-            )
-
-            return {
-                'metric_name': metric_name,
-                'datapoints': response.get('Datapoints', []),
-                'count': len(response.get('Datapoints', []))
+                }
             }
-        except Exception as e:
-            print(f"Error getting metrics for {function_name}: {e}")
-            return {}
+            action_targets = {'SpotInstances': 'SpotInstances-Target'}
+        else:
+            # General EC2 actions (stop-instances, reboot-instances)
+            targets = {
+                'Instances-Target': {
+                    'resourceType': 'aws:ec2:instance',
+                    'selectionMode': 'ALL',
+                    'resourceTags': {
+                        'Environment': f'{variables.prefix}-spot-test'
+                    }
+                }
+            }
+            action_targets = {'Instances': 'Instances-Target'}
 
-    def generate_report(self,
-                       logs: Dict[str, List[Dict]],
-                       metrics: Dict[str, Dict],
-                       output_file: str = None) -> str:
-        """테스트 결과 보고서 생성"""
+        template_json = {
+            'description': exp_config['description'],
+            'stopConditions': [{'source': 'none'}],
+            'targets': targets,
+            'actions': {
+                f'{exp_name}-action': {
+                    'actionId': exp_config['action_id'],
+                    'description': f'Action for {exp_name}',
+                    'parameters': exp_config['parameters'],
+                    'targets': action_targets
+                }
+            },
+            'roleArn': iam_role_arn,
+            'tags': {'Name': f'{variables.prefix}-{exp_name}'}
+        }
+        json.dump(template_json, f)
+        temp_file = f.name
 
-        report = []
-        report.append("=" * 80)
-        report.append("AWS FIS Testing Report")
-        report.append(f"Generated: {datetime.now().isoformat()}")
-        report.append("=" * 80)
-        report.append("")
+    try:
+        cmd = [
+            'aws', 'fis', 'create-experiment-template',
+            '--region', r,
+            '--profile', variables.awscli_profile,
+            '--cli-input-json', f'file://{temp_file}'
+        ]
 
-        # CloudWatch Logs 요약
-        report.append("CloudWatch Logs Summary:")
-        report.append("-" * 80)
+        result = subprocess.run(cmd, capture_output=True, text=True)
 
-        for stream_name, events in logs.items():
-            report.append(f"\n{stream_name}:")
-            report.append(f"  Event count: {len(events)}")
+        if result.returncode == 0:
+            print(f"✓ [{r}] {variables.prefix}-{exp_name} created successfully")
+            return True
+        else:
+            print(f"✗ [{r}] {exp_name}: {result.stderr}")
+            return False
+    finally:
+        os.unlink(temp_file)
 
-            if events:
-                report.append(f"  First event: {events[0]['timestamp']}")
-                report.append(f"  Last event: {events[-1]['timestamp']}")
 
-                # 이벤트 타입별 분포
-                if isinstance(events[0]['message'], dict):
-                    event_types = {}
-                    for event in events:
-                        event_type = event['message'].get('detail-type', 'unknown')
-                        event_types[event_type] = event_types.get(event_type, 0) + 1
+def run_experiment_region(r: str, experiment_type: str, duration_seconds: int) -> Optional[str]:
+    """Run FIS experiment in a specific region."""
+    tester = FISTester(
+        profile=variables.awscli_profile,
+        region=r,
+        prefix=variables.prefix
+    )
 
-                    if event_types:
-                        report.append("  Event types:")
-                        for event_type, count in event_types.items():
-                            report.append(f"    - {event_type}: {count}")
+    tester.tag_spot_instances()
+    exp_id = tester.run_experiment(experiment_type, duration_seconds)
 
-        # Lambda 메트릭 요약
-        report.append("\n" + "=" * 80)
-        report.append("Lambda Metrics Summary:")
-        report.append("-" * 80)
-
-        for func_name, func_metrics in metrics.items():
-            report.append(f"\n{func_name}:")
-            for metric_type, metric_data in func_metrics.items():
-                if metric_data:
-                    count = metric_data.get('count', 0)
-                    report.append(f"  {metric_type}: {count} data points")
-
-        report_text = "\n".join(report)
-
-        if output_file:
-            with open(output_file, 'w') as f:
-                f.write(report_text)
-            print(f"\nReport saved to: {output_file}")
-
-        return report_text
+    if exp_id:
+        print(f"[{r}] Waiting for experiment {exp_id} to complete...")
+        tester.wait_experiment_completion(exp_id)
+        return exp_id
+    return None
 
 
 def main():
@@ -442,7 +400,7 @@ def main():
     )
     parser.add_argument(
         '--action',
-        choices=['setup', 'run', 'list', 'collect-logs', 'report', 'cleanup', 'start-instances'],
+        choices=['setup', 'run', 'list', 'cleanup', 'start-instances'],
         default='list',
         help='Action to perform'
     )
@@ -467,217 +425,143 @@ def main():
     regions = variables.region if isinstance(variables.region, list) else [variables.region]
 
     global_return_code = 0
-    
-    for r in regions:
-        print(f"\n" + "="*80)
-        print(f"PROCESSING REGION: {r}")
+
+    # Setup action: parallel experiment template creation
+    if args.action == 'setup':
         print("="*80)
-        
-        tester = FISTester(
-            profile=variables.awscli_profile,
-            region=r,
-            prefix=variables.prefix
-        )
+        print(f"Setting up FIS Infrastructure for {len(regions)} region(s)")
+        print("="*80)
 
-        if args.action == 'setup':
-            print("="*80)
-            print(f"Setting up FIS Infrastructure for region: {r}")
-            print("="*80)
-
-            # FIS IAM Role ARN (Lambda 역할의 FIS 권한으로 사용)
-            account_id = tester._get_account_id()
-            iam_role_arn = f"arn:aws:iam::{account_id}:role/{variables.prefix}-fis-role-{r}"
-
-            experiments = {
-                'ec2-stop': {
-                    'description': 'Stop EC2 instances to test get-spot-status-change Lambda',
-                    'action_id': 'aws:ec2:stop-instances',
-                    'parameters': {}
-                },
-                'spot-rebalance': {
-                    'description': 'Send Spot Instance rebalance recommendation signal to test get-spot-rebalance Lambda',
-                    'action_id': 'aws:ec2:send-spot-instance-interruptions',
-                    'parameters': {'durationBeforeInterruption': 'PT5M'}
-                },
-                'spot-interruption': {
-                    'description': 'Send Spot Instance interruption warning (2-minute notice) to test get-spot-interruption Lambda',
-                    'action_id': 'aws:ec2:send-spot-instance-interruptions',
-                    'parameters': {'durationBeforeInterruption': 'PT2M'}
-                },
-                'instance-reboot': {
-                    'description': 'Reboot EC2 instances to test log-instance-count Lambda',
-                    'action_id': 'aws:ec2:reboot-instances',
-                    'parameters': {}
-                }
+        experiments = {
+            'ec2-stop': {
+                'description': 'Stop EC2 instances to test get-spot-status-change Lambda',
+                'action_id': 'aws:ec2:stop-instances',
+                'parameters': {}
+            },
+            'spot-rebalance': {
+                'description': 'Send Spot Instance rebalance recommendation signal to test get-spot-rebalance Lambda',
+                'action_id': 'aws:ec2:send-spot-instance-interruptions',
+                'parameters': {'durationBeforeInterruption': 'PT5M'}
+            },
+            'spot-interruption': {
+                'description': 'Send Spot Instance interruption warning (2-minute notice) to test get-spot-interruption Lambda',
+                'action_id': 'aws:ec2:send-spot-instance-interruptions',
+                'parameters': {'durationBeforeInterruption': 'PT2M'}
+            },
+            'instance-reboot': {
+                'description': 'Reboot EC2 instances to test log-instance-count Lambda',
+                'action_id': 'aws:ec2:reboot-instances',
+                'parameters': {}
             }
+        }
 
-            for exp_name, exp_config in experiments.items():
-                print(f"\nCreating FIS experiment: {variables.prefix}-{exp_name}")
+        # Parallel: Create experiment templates across regions and experiment types
+        with ThreadPoolExecutor(max_workers=len(regions) * len(experiments)) as executor:
+            futures = []
+            for r in regions:
+                for exp_name, exp_config in experiments.items():
+                    future = executor.submit(setup_experiment, r, exp_name, exp_config)
+                    futures.append(future)
 
-                # JSON 파일로 저장
-                import tempfile
-                with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False) as f:
-                    # AWS FIS API: action별 target 설정
-                    if exp_name in ['spot-rebalance', 'spot-interruption']:
-                        # Spot Instance 전용 targets
-                        targets = {
-                            'SpotInstances-Target': {
-                                'resourceType': 'aws:ec2:spot-instance',
-                                'selectionMode': 'ALL',
-                                'resourceTags': {
-                                    'Environment': f'{variables.prefix}-spot-test'
-                                }
-                            }
-                        }
-                        action_targets = {'SpotInstances': 'SpotInstances-Target'}
-                    else:
-                        # 일반 EC2 인스턴스 targets
-                        targets = {
-                            'Instances-Target': {
-                                'resourceType': 'aws:ec2:instance',
-                                'selectionMode': 'ALL',
-                                'resourceTags': {
-                                    'Environment': f'{variables.prefix}-spot-test'
-                                }
-                            }
-                        }
-                        action_targets = {'Instances': 'Instances-Target'}
-
-                    template_json = {
-                        'description': exp_config['description'],
-                        'stopConditions': [{'source': 'none'}],
-                        'targets': targets,
-                        'actions': {
-                            f'{exp_name}-action': {
-                                'actionId': exp_config['action_id'],
-                                'description': f'Action for {exp_name}',
-                                'parameters': exp_config['parameters'],
-                                'targets': action_targets
-                            }
-                        },
-                        'roleArn': iam_role_arn,
-                        'tags': {'Name': f'{variables.prefix}-{exp_name}'}
-                    }
-                    json.dump(template_json, f)
-                    temp_file = f.name
-
+            success_count = 0
+            for future in as_completed(futures):
                 try:
-                    # AWS CLI로 FIS 실험 템플릿 생성
-                    cmd = [
-                        'aws', 'fis', 'create-experiment-template',
-                        '--region', r,
-                        '--profile', variables.awscli_profile,
-                        '--cli-input-json', f'file://{temp_file}'
-                    ]
+                    if future.result():
+                        success_count += 1
+                except Exception as e:
+                    print(f"✗ Error creating experiment template: {e}")
 
-                    result = subprocess.run(cmd, capture_output=True, text=True)
+        print("\n" + "="*80)
+        print(f"FIS setup completed! ({success_count}/{len(futures)} templates created)")
+        print("="*80 + "\n")
 
-                    if result.returncode == 0:
-                        print(f"✓ {variables.prefix}-{exp_name} created successfully")
-                    else:
-                        print(f"⚠ {exp_name}: {result.stderr}")
-                finally:
-                    # 임시 파일 삭제
-                    import os
-                    os.unlink(temp_file)
+    elif args.action == 'run':
+        if not args.experiment_type:
+            print("Error: --experiment-type required for 'run' action")
+            return 1
 
-            print("\n" + "="*80)
-            print("FIS setup completed!")
-            print("="*80 + "\n")
+        print("="*80)
+        print(f"Running {args.experiment_type} experiments in {len(regions)} region(s) in parallel")
+        print("="*80)
 
-        elif args.action == 'run':
-            if not args.experiment_type:
-                print("Error: --experiment-type required for 'run' action")
-                global_return_code = 1
-                continue
+        with ThreadPoolExecutor(max_workers=len(regions)) as executor:
+            futures = [
+                executor.submit(run_experiment_region, r, args.experiment_type, args.duration)
+                for r in regions
+            ]
 
-            # 인스턴스에 태그 추가
-            tester.tag_spot_instances()
+            for future in as_completed(futures):
+                try:
+                    future.result()
+                except Exception as e:
+                    print(f"✗ Error running experiment: {e}")
+                    global_return_code = 1
 
-            # 실험 실행
-            exp_id = tester.run_experiment(args.experiment_type, args.duration)
+    elif args.action == 'list':
+        print("="*80)
+        print(f"Listing FIS experiments in {len(regions)} region(s)")
+        print("="*80)
 
-            if exp_id:
-                print(f"Waiting for experiment {exp_id} to complete...")
-                tester.wait_experiment_completion(exp_id)
-    
-        elif args.action == 'list':
+        for r in regions:
+            tester = FISTester(
+                profile=variables.awscli_profile,
+                region=r,
+                prefix=variables.prefix
+            )
             experiments = tester.list_experiments()
             if experiments:
-                print(f"Found {len(experiments)} experiments:")
+                print(f"\n[{r}] Found {len(experiments)} experiments:")
                 for exp in experiments:
-                    print(f"  - {exp['title']} ({exp['id']})")
+                    #print(exp)
+                    print(f"  - {exp['tags']['Name']} ({exp['id']})")
             else:
-                print("No experiments found")
+                print(f"\n[{r}] No experiments found")
 
-        elif args.action == 'collect-logs':
-            log_group_name = f"{variables.prefix}-spot-checker-multinode-log"
-    
-            print(f"Collecting logs from {log_group_name}...")
-            logs = tester.collect_logs(log_group_name)
-    
-            print("\nLog Collection Summary:")
-            for stream_name, events in logs.items():
-                print(f"  {stream_name}: {len(events)} events")
-    
-            # JSON으로 저장
-            output_json = f'fis_logs_{r}.json'
-            with open(output_json, 'w') as f:
-                json_logs = {}
-                for stream_name, events in logs.items():
-                    json_logs[stream_name] = [
-                        {
-                            'timestamp': event['timestamp'].isoformat(),
-                            'message': event['message']
-                        }
-                        for event in events
-                    ]
-                json.dump(json_logs, f, indent=2)
-    
-            print(f"Logs saved to {output_json}")
+    elif args.action == 'cleanup':
+        print("="*80)
+        print("Cleaning up FIS infrastructure...")
+        print("="*80)
 
-        elif args.action == 'report':
-            log_group_name = f"{variables.prefix}-spot-checker-multinode-log"
-            logs = tester.collect_logs(log_group_name)
-    
-            lambda_functions = [
-                f"{variables.prefix}-get-spot-status-change",
-                f"{variables.prefix}-get-spot-rebalance",
-                f"{variables.prefix}-get-spot-interruption",
-                f"{variables.prefix}-log-instance-count",
-                f"{variables.prefix}-restart-closed-request"
-            ]
-    
-            metrics = tester.get_lambda_metrics(lambda_functions)
-    
-            output_file = args.output or f'fis_report_{r}.txt'
-            report = tester.generate_report(logs, metrics, output_file)
-            print(report)
-            
-        elif args.action == 'cleanup':
-            print("Cleaning up FIS infrastructure...")
-            # IaC 디렉토리 절대 경로 계산
-            script_dir = os.path.dirname(os.path.abspath(__file__))
-            iac_dir = os.path.join(script_dir, 'IaC')
+        script_dir = os.path.dirname(os.path.abspath(__file__))
+        iac_dir = os.path.join(script_dir, 'IaC')
 
-            destroy_result = subprocess.run(
-                ['terraform', f'-chdir={iac_dir}', 'destroy', '--auto-approve'],
-                capture_output=True,
-                text=True
+        destroy_result = subprocess.run(
+            ['terraform', f'-chdir={iac_dir}', 'destroy', '--auto-approve'],
+            capture_output=True,
+            text=True
+        )
+        if destroy_result.returncode == 0:
+            print("✓ FIS infrastructure cleaned up successfully")
+            print(destroy_result.stdout)
+        else:
+            print(f"✗ Error cleaning up FIS infrastructure: {destroy_result.stderr}")
+            global_return_code = 1
+
+    elif args.action == 'start-instances':
+        print("="*80)
+        print(f"Starting stopped instances in {len(regions)} region(s) in parallel")
+        print("="*80)
+
+        def start_instances_region(r):
+            tester = FISTester(
+                profile=variables.awscli_profile,
+                region=r,
+                prefix=variables.prefix
             )
-            if destroy_result.returncode == 0:
-                print("FIS infrastructure cleaned up successfully")
-                print(destroy_result.stdout)
-            else:
-                print(f"Error cleaning up FIS infrastructure: {destroy_result.stderr}")
-                global_return_code = 1
-                continue
-
-        elif args.action == 'start-instances':
-            print("="*80)
-            print(f"Starting stopped instances in region: {r}")
-            print("="*80)
             tester.start_stopped_instances()
+
+        with ThreadPoolExecutor(max_workers=len(regions)) as executor:
+            futures = [
+                executor.submit(start_instances_region, r)
+                for r in regions
+            ]
+
+            for future in as_completed(futures):
+                try:
+                    future.result()
+                except Exception as e:
+                    print(f"✗ Error starting instances: {e}")
+                    global_return_code = 1
 
     return global_return_code
 

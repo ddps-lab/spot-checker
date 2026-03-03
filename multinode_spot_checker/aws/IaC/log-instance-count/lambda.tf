@@ -15,6 +15,7 @@ resource "aws_lambda_function" "lambda" {
   handler       = "log-instance-count.lambda_handler"
   filename      = "log-instance-count.zip"
   role          = var.lambda_role_arn
+  source_code_hash = filebase64sha256("log-instance-count.zip")
 
   environment {
     variables = {
@@ -22,6 +23,7 @@ resource "aws_lambda_function" "lambda" {
       LOG_STREAM_NAME_COUNT             = var.log_stream_name_count,
       LOG_STREAM_NAME_PLACEMENT_FAILED  = var.log_stream_name_placement_failed,
       RECENT_WINDOW_MINUTES             = var.recent_window_minutes,
+      PREFIX                            = var.prefix,
     }
   }
 }

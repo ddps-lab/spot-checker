@@ -19,8 +19,8 @@ def main():
             response = ec2_client.describe_spot_instance_requests(
                 Filters=[
                     {
-                        'Name': 'tag:Project',
-                        'Values': ['spot-checker-multinode']
+                        'Name': 'tag:Environment',
+                        'Values': [f'{variables.prefix}-spot-test']
                     },
                     {
                         'Name': 'state',

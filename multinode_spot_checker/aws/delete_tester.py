@@ -4,6 +4,53 @@ import os
 import variables
 import boto3
 
+def terminate_tagged_instances(awscli_profile, regions, prefix):
+    """Terminate Spot instances with Environment={prefix}-spot-test tag"""
+    print("\n" + "="*80)
+    print("Terminating Spot instances with tag Environment={}-spot-test".format(prefix))
+    print("="*80)
+
+    if not isinstance(regions, list):
+        regions = [regions]
+
+    for region in regions:
+        print(f"\n[{region}] Terminating instances...")
+        session = boto3.Session(profile_name=awscli_profile, region_name=region)
+        ec2_client = session.client('ec2')
+
+        # Find instances with tag Environment={prefix}-spot-test
+        response = ec2_client.describe_instances(
+            Filters=[
+                {
+                    'Name': 'tag:Environment',
+                    'Values': [f'{prefix}-spot-test']
+                },
+                {
+                    'Name': 'instance-state-name',
+                    'Values': ['running', 'stopped']
+                }
+            ]
+        )
+
+        instance_ids = []
+        for reservation in response.get('Reservations', []):
+            for instance in reservation.get('Instances', []):
+                instance_ids.append(instance['InstanceId'])
+
+        if not instance_ids:
+            print(f"  ℹ️  No instances to terminate in {region}")
+            continue
+
+        # Terminate instances
+        try:
+            termination_result = ec2_client.terminate_instances(InstanceIds=instance_ids)
+            terminated = termination_result.get('TerminatingInstances', [])
+            print(f"  ✓ Terminating {len(terminated)} instances:")
+            for instance in terminated:
+                print(f"    - {instance['InstanceId']} (State: {instance['CurrentState']['Name']})")
+        except Exception as e:
+            print(f"  ✗ Error terminating instances: {e}")
+
 def run_command(command):
     process = subprocess.Popen(
         command, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
@@ -31,7 +78,10 @@ def main():
     awscli_profile = variables.awscli_profile
     prefix = variables.prefix
     region = variables.region
-    log_group_name = f"{prefix}-spot-availability-tester-log"
+    log_group_name = f"{prefix}-spot-checker-multinode-log"
+
+    # First, terminate all tagged Spot instances
+    terminate_tagged_instances(awscli_profile, region, prefix)
     log_stream_name_change_status = f"{variables.log_stream_name_change_status}"
     log_stream_name_init_time = f"{variables.log_stream_name_init_time}"
     log_stream_name_rebalance = f"{variables.log_stream_name_rebalance}"

@@ -10,6 +10,7 @@ import subprocess
 import random
 import string
 import pandas as pd
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 def random_string(length=4):
     characters = string.ascii_letters + string.digits  # 대소문자 알파벳과 숫자 포함
@@ -64,18 +65,68 @@ def change_log_parse_log_data_to_csv(input_file, output_file):
             log_json = json.loads(log_data.strip())
             writer.writerow([log_json['Timestamp'], log_json['SpotRequestId'], log_json['InstanceState'], log_json['InstanceType'], log_json['AZ'], log_json['Code'], log_json['Message']])
 
-def init_log_parse_log_data_to_csv(input_file, output_file):
+def rebalance_log_parse_log_data_to_csv(input_file, output_file):
     with open(input_file, 'r') as f:
         lines = f.readlines()
 
     with open(output_file, 'w', newline='') as f:
         writer = csv.writer(f)
-        writer.writerow(["timestamp", "instance_id", "instance_type", "spot_request_id", "az", "vail_from"])  # 헤더
+        writer.writerow(["EventType", "Timestamp", "InstanceId", "SpotRequestId", "InstanceType", "AZ"])  # 헤더
 
         for line in lines:
             log_timestamp, log_data = line.split(' ', 1)
             log_json = json.loads(log_data.strip())
-            writer.writerow([log_json['timestamp'], log_json['instance_id'], log_json['instance_type'], log_json['spot_request_id'], log_json['az'], log_json['vail_from']])
+            writer.writerow([log_json['EventType'], log_json['Timestamp'], log_json['InstanceId'], log_json['SpotRequestId'], log_json['InstanceType'], log_json['AZ']])
+
+def interruption_log_parse_log_data_to_csv(input_file, output_file):
+    with open(input_file, 'r') as f:
+        lines = f.readlines()
+
+    with open(output_file, 'w', newline='') as f:
+        writer = csv.writer(f)
+        writer.writerow(["EventType", "Timestamp", "InstanceId", "SpotRequestId", "InstanceType", "AZ", "InstanceAction"])  # 헤더
+
+        for line in lines:
+            log_timestamp, log_data = line.split(' ', 1)
+            log_json = json.loads(log_data.strip())
+            writer.writerow([log_json['EventType'], log_json['Timestamp'], log_json['InstanceId'], log_json['SpotRequestId'], log_json['InstanceType'], log_json['AZ'], log_json['InstanceAction']])
+
+def count_log_parse_log_data_to_csv(input_file, output_file):
+    with open(input_file, 'r') as f:
+        lines = f.readlines()
+
+    with open(output_file, 'w', newline='') as f:
+        writer = csv.writer(f)
+        writer.writerow(["EventType", "Timestamp", "InstanceType", "AZ", "Count", "FailureCode", "FailureMessage", "RequestState", "SpotRequestId", "TagFilter"])  # 헤더
+
+        for line in lines:
+            log_timestamp, log_data = line.split(' ', 1)
+            log_json = json.loads(log_data.strip())
+
+            # InstanceCount 이벤트
+            if log_json.get('EventType') == 'InstanceCount':
+                writer.writerow([
+                    log_json['EventType'],
+                    log_json['Timestamp'],
+                    log_json['InstanceType'],
+                    log_json['AZ'],
+                    log_json['Count'],
+                    '', '', '', '', log_json.get('TagFilter', '')
+                ])
+            # PlacementFailed 이벤트
+            elif log_json.get('EventType') == 'PlacementFailed':
+                writer.writerow([
+                    log_json['EventType'],
+                    log_json['Timestamp'],
+                    log_json['InstanceType'],
+                    log_json['AZ'],
+                    '',
+                    log_json['FailureCode'],
+                    log_json['FailureMessage'],
+                    log_json['RequestState'],
+                    log_json['SpotRequestId'],
+                    log_json.get('TagFilter', '')
+                ])
 
 #수정 필요
 def download_result(s3_client, bucket_name, log_stream_name, log_type, region, result_folder_path):
@@ -103,8 +154,12 @@ def download_result(s3_client, bucket_name, log_stream_name, log_type, region, r
         subprocess.run(f"cd /tmp/spot-availability-test/{region}/{log_type} && gunzip {gz_file_name}", shell=True, text=True)
         if log_type == "change":
             change_log_parse_log_data_to_csv(f"/tmp/spot-availability-test/{region}/{log_type}/{file_name}", f"./result_data/{result_folder_path}/{region}/{log_type}/{file_name}.csv")
-        elif log_type == "init":
-            init_log_parse_log_data_to_csv(f"/tmp/spot-availability-test/{region}/{log_type}/{file_name}", f"./result_data/{result_folder_path}/{region}/{log_type}/{file_name}.csv")
+        elif log_type == "rebalance":
+            rebalance_log_parse_log_data_to_csv(f"/tmp/spot-availability-test/{region}/{log_type}/{file_name}", f"./result_data/{result_folder_path}/{region}/{log_type}/{file_name}.csv")
+        elif log_type == "interruption":
+            interruption_log_parse_log_data_to_csv(f"/tmp/spot-availability-test/{region}/{log_type}/{file_name}", f"./result_data/{result_folder_path}/{region}/{log_type}/{file_name}.csv")
+        elif log_type == "count":
+            count_log_parse_log_data_to_csv(f"/tmp/spot-availability-test/{region}/{log_type}/{file_name}", f"./result_data/{result_folder_path}/{region}/{log_type}/{file_name}.csv")
     
     df_list = [pd.read_csv(f"./result_data/{result_folder_path}/{region}/{log_type}/{file}.csv") for file in file_names]
     if not df_list:
@@ -118,15 +173,33 @@ def download_result(s3_client, bucket_name, log_stream_name, log_type, region, r
 
     print(f"Region {region} {log_type} log export complete!")
 
+def process_region(region, awscli_profile, prefix, log_group_name, change_log_stream_name, rebalance_log_stream_name, interruption_log_stream_name, count_log_stream_name, milliseconds_start_time, milliseconds_end_time, result_folder_path):
+    """각 region의 데이터를 병렬로 처리"""
+    try:
+        boto3_session = boto3.Session(profile_name=awscli_profile, region_name=region)
+        s3_resource = boto3_session.resource('s3')
+        s3_client = boto3_session.client('s3')
+
+        empty_s3_bucket(f"{prefix}-spot-availability-tester-log-{region}", s3_resource)
+        export_logs_to_s3(boto3_session, log_group_name, milliseconds_start_time, milliseconds_end_time, f"{prefix}-spot-availability-tester-log-{region}", "spot-availability-test", region)
+        download_result(s3_client, f"{prefix}-spot-availability-tester-log-{region}", change_log_stream_name, "change", region, result_folder_path)
+        download_result(s3_client, f"{prefix}-spot-availability-tester-log-{region}", rebalance_log_stream_name, "rebalance", region, result_folder_path)
+        download_result(s3_client, f"{prefix}-spot-availability-tester-log-{region}", interruption_log_stream_name, "interruption", region, result_folder_path)
+        download_result(s3_client, f"{prefix}-spot-availability-tester-log-{region}", count_log_stream_name, "count", region, result_folder_path)
+
+        print(f"✓ Region {region} processing completed")
+    except Exception as e:
+        print(f"✗ Error processing region {region}: {e}")
+
 def merge_csv_files(log_type, regions, result_folder_path):
     df_list = []
-    
+
     for region in regions:
         file_path = f"./result_data/{result_folder_path}/{region}/{log_type}/result.csv"
-        
+
         if os.path.exists(file_path):
             df_list.append(pd.read_csv(file_path))
-    
+
     if len(df_list) != 0:
         combined_df = pd.concat(df_list, ignore_index=True)
         combined_df.to_csv(f'./result_data/{result_folder_path}/{log_type}_result.csv', index=False)
@@ -136,17 +209,24 @@ def main():
     prefix = variables.prefix
     log_group_name = f"{prefix}-spot-checker-multinode-log"
     change_log_stream_name = variables.log_stream_name_change_status
-    init_log_stream_name = variables.log_stream_name_init_time
+    rebalance_log_stream_name = variables.log_stream_name_rebalance
+    interruption_log_stream_name = variables.log_stream_name_interruption
+    count_log_stream_name = variables.log_stream_name_count
 
-    start_time = input("Enter the log start time ex)2020-10-10 10:10 : ")
-    end_time = input("Enter the log end time ex)2020-10-10 10:10 : ")
+    start_date = input("Enter the log start date (ex: 2026-03-04) : ")
+    start_time_input = input("Enter the log start time (ex: 02:34) : ")
+    start_time = f"{start_date} {start_time_input}"
+
+    end_date = input("Enter the log end date (ex: 2026-03-04) : ")
+    end_time_input = input("Enter the log end time (ex: 03:00) : ")
+    end_time = f"{end_date} {end_time_input}"
+
     milliseconds_start_time = datetime_to_utc_milliseconds(start_time)
     milliseconds_end_time = datetime_to_utc_milliseconds(end_time)
     # milliseconds_start_time = datetime_to_utc_milliseconds("2024-08-18 00:00")
     # milliseconds_end_time = datetime_to_utc_milliseconds("2024-08-21 00:00")
 
-    with open('regions.txt', 'r', encoding='utf-8') as file:
-        regions = [line.strip() for line in file.readlines()]
+    regions = variables.region if isinstance(variables.region, list) else [variables.region]
 
     if os.path.exists('/tmp/spot-availability-test') and os.path.isdir('/tmp/spot-availability-test'):
         shutil.rmtree('/tmp/spot-availability-test')
@@ -160,17 +240,45 @@ def main():
             os.makedirs(f'./result_data/{result_folder_path}')
             break
 
-    for region in regions:
-        boto3_session = boto3.Session(profile_name=awscli_profile, region_name=region)
-        s3_resource = boto3_session.resource('s3')
-        s3_client = boto3_session.client('s3')
-        empty_s3_bucket(f"{prefix}-spot-availability-tester-log-{region}", s3_resource)
-        export_logs_to_s3(boto3_session, log_group_name, milliseconds_start_time, milliseconds_end_time, f"{prefix}-spot-availability-tester-log-{region}", "spot-availability-test", region)
-        download_result(s3_client, f"{prefix}-spot-availability-tester-log-{region}", change_log_stream_name, "change", region, result_folder_path)
-        download_result(s3_client, f"{prefix}-spot-availability-tester-log-{region}", init_log_stream_name, "init", region, result_folder_path)
+    # Parallel: Process each region concurrently
+    print("="*80)
+    print(f"Exporting logs from {len(regions)} region(s) in parallel")
+    print("="*80)
+
+    with ThreadPoolExecutor(max_workers=len(regions)) as executor:
+        futures = [
+            executor.submit(
+                process_region,
+                region,
+                awscli_profile,
+                prefix,
+                log_group_name,
+                change_log_stream_name,
+                rebalance_log_stream_name,
+                interruption_log_stream_name,
+                count_log_stream_name,
+                milliseconds_start_time,
+                milliseconds_end_time,
+                result_folder_path
+            )
+            for region in regions
+        ]
+
+        for future in as_completed(futures):
+            future.result()
+
+    print("\n" + "="*80)
+    print("Merging CSV files across regions")
+    print("="*80)
 
     merge_csv_files("change", regions, result_folder_path)
-    merge_csv_files("init", regions, result_folder_path)
+    merge_csv_files("rebalance", regions, result_folder_path)
+    merge_csv_files("interruption", regions, result_folder_path)
+    merge_csv_files("count", regions, result_folder_path)
+
+    print("\n" + "="*80)
+    print("Export completed! Results saved in ./result_data/")
+    print("="*80)
 
 if __name__ == "__main__":
     main()

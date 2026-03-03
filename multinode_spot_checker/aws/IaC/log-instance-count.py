@@ -12,6 +12,7 @@ LOG_GROUP_NAME = os.environ['LOG_GROUP_NAME']
 LOG_STREAM_NAME_COUNT = os.environ['LOG_STREAM_NAME_COUNT']
 LOG_STREAM_NAME_PLACEMENT_FAILED = os.environ['LOG_STREAM_NAME_PLACEMENT_FAILED']
 RECENT_WINDOW_MINUTES = int(os.environ.get('RECENT_WINDOW_MINUTES', '10'))
+PREFIX = os.environ.get('PREFIX', 'jglee')  # Tag filter prefix
 
 # placement 실패로 판단할 상태 코드 목록
 PLACEMENT_FAILURE_CODES = {
@@ -45,21 +46,23 @@ def lambda_handler(event, context):
     timestamp_str = now_utc.strftime('%Y-%m-%dT%H:%M:%SZ')
     recent_cutoff = now_utc - timedelta(minutes=RECENT_WINDOW_MINUTES)
 
-    # ── 1. active/open 요청 집계 → instance_count 스트림 ─────────────
+    # ── 1. Tagged instance 집계 → instance_count 스트림 ─────────────
+    # Environment={PREFIX}-spot-test 태그를 가진 running 인스턴스만 수집
     count_dict = defaultdict(int)
-    paginator = ec2_client.get_paginator('describe_spot_instance_requests')
+    instance_paginator = ec2_client.get_paginator('describe_instances')
 
-    for page in paginator.paginate(
+    for page in instance_paginator.paginate(
         Filters=[
-            {'Name': 'state', 'Values': ['active', 'open']},
-            {'Name': 'type', 'Values': ['persistent']}
+            {'Name': 'instance-state-name', 'Values': ['running']},
+            {'Name': 'instance-lifecycle', 'Values': ['spot']},
+            {'Name': 'tag:Environment', 'Values': [f'{PREFIX}-spot-test']}
         ]
     ):
-        for req in page.get('SpotInstanceRequests', []):
-            instance_type = req['LaunchSpecification']['InstanceType']
-            az = req.get('LaunchedAvailabilityZone') or \
-                 req['LaunchSpecification']['Placement']['AvailabilityZone']
-            count_dict[(instance_type, az)] += 1
+        for reservation in page.get('Reservations', []):
+            for instance in reservation.get('Instances', []):
+                instance_type = instance['InstanceType']
+                az = instance['Placement']['AvailabilityZone']
+                count_dict[(instance_type, az)] += 1
 
     for (instance_type, az), count in count_dict.items():
         put_log(LOG_STREAM_NAME_COUNT, {
@@ -67,18 +70,30 @@ def lambda_handler(event, context):
             "Timestamp": timestamp_str,
             "InstanceType": instance_type,
             "AZ": az,
-            "Count": count
+            "Count": count,
+            "TagFilter": f"Environment={PREFIX}-spot-test"
         })
 
     # ── 2. placement 실패 수집 → placement_failed 스트림 ─────────────
     # UpdateTime 기반 최근 N분 이내 항목만 기록 (중복 방지)
-    for page in paginator.paginate(
+    # 태깅된 요청(Environment={PREFIX}-spot-test)만 수집
+    spot_req_paginator = ec2_client.get_paginator('describe_spot_instance_requests')
+
+    for page in spot_req_paginator.paginate(
         Filters=[
             {'Name': 'state', 'Values': ['closed', 'failed']},
             {'Name': 'type', 'Values': ['persistent']}
         ]
     ):
         for req in page.get('SpotInstanceRequests', []):
+            # Check if request has the test tag (Prefix tag)
+            req_tags = req.get('Tags', [])
+            has_prefix_tag = any(tag['Key'] == 'Prefix' and PREFIX in tag.get('Value', '')
+                                for tag in req_tags)
+
+            if not has_prefix_tag:
+                continue
+
             status = req.get('Status', {})
             code = status.get('Code', '')
 
@@ -101,7 +116,8 @@ def lambda_handler(event, context):
                 "AZ": az,
                 "FailureCode": code,
                 "FailureMessage": status.get('Message', ''),
-                "RequestState": req['State']
+                "RequestState": req['State'],
+                "TagFilter": f"Prefix={PREFIX}"
             })
 
     return {

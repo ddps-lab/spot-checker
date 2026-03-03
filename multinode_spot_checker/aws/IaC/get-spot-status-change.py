@@ -5,6 +5,7 @@ import json
 
 LOG_GROUP_NAME = os.environ['LOG_GROUP_NAME']
 LOG_STREAM_NAME = os.environ['LOG_STREAM_NAME']
+PREFIX = os.environ.get('PREFIX')
 
 ec2 = boto3.client('ec2')
 logs_client = boto3.client('logs')
@@ -27,10 +28,18 @@ def lambda_handler(event, context):
 
     if not response['Reservations']:
         return
-    # print(event)
-    spot_request_id = response['Reservations'][0]['Instances'][0]['SpotInstanceRequestId']
-    az = response['Reservations'][0]['Instances'][0]['Placement']['AvailabilityZone']
-    instance_type = response['Reservations'][0]['Instances'][0]['InstanceType']
+
+    instance = response['Reservations'][0]['Instances'][0]
+
+    # Check if instance has the test tag (Environment={PREFIX}-spot-test)
+    tags = {tag['Key']: tag['Value'] for tag in instance.get('Tags', [])}
+    if tags.get('Environment') != f'{PREFIX}-spot-test':
+        print(f"Instance {instance['InstanceId']} does not have tag Environment={PREFIX}-spot-test. Skipping.")
+        return
+
+    spot_request_id = instance['SpotInstanceRequestId']
+    az = instance['Placement']['AvailabilityZone']
+    instance_type = instance['InstanceType']
     request_describe = ec2.describe_spot_instance_requests(SpotInstanceRequestIds=[spot_request_id])
     
     print(request_describe['SpotInstanceRequests'][0]['Type'])
@@ -50,7 +59,8 @@ def lambda_handler(event, context):
         "AZ" : az,
         "Code" : code,
         "Message" : message,
-        "UpdateTime" : update_time
+        "UpdateTime" : update_time,
+        "TagFilter": f"Environment={PREFIX}-spot-test"
     }
     create_log_event(json.dumps(log_data))
 

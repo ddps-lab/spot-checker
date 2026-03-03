@@ -3,6 +3,31 @@ import sys
 import os
 import variables
 import boto3
+import zipfile
+
+def create_lambda_zip(function_name, source_dir):
+    """Create Lambda function ZIP file"""
+    zip_filename = f"{function_name}.zip"
+    py_filename = os.path.join(source_dir, f"{function_name}.py")
+
+    # Check if file exists
+    if not os.path.exists(py_filename):
+        print(f"  ✗ Error: {py_filename} not found")
+        return False
+
+    # Remove old ZIP if exists
+    if os.path.exists(zip_filename):
+        os.remove(zip_filename)
+
+    # Create new ZIP with Lambda handler
+    try:
+        with zipfile.ZipFile(zip_filename, 'w', zipfile.ZIP_DEFLATED) as zipf:
+            zipf.write(py_filename, arcname=f"{function_name}.py")
+        print(f"  ✓ Created {zip_filename}")
+        return True
+    except Exception as e:
+        print(f"  ✗ Error creating {zip_filename}: {e}")
+        return False
 
 def run_command(command):
     process = subprocess.Popen(
@@ -57,6 +82,25 @@ def main():
 
     if type(region)==type(list()):
         tf_project_dir = "./IaC"
+
+        # Create Lambda ZIP files before Terraform
+        print("\n" + "="*80)
+        print("Creating Lambda function ZIP files...")
+        print("="*80)
+        lambda_functions = [
+            'get-spot-status-change',
+            'get-spot-rebalance',
+            'get-spot-interruption',
+            'log-instance-count',
+            'restart-closed-request'
+        ]
+
+        os.chdir(tf_project_dir)
+        # Source files are in the same IaC directory
+        for func in lambda_functions:
+            create_lambda_zip(func, ".")
+        os.chdir("..")
+
         os.chdir(tf_project_dir)
         for r in region:
             session = boto3.Session(profile_name=awscli_profile, region_name=r)
@@ -98,6 +142,25 @@ def main():
                         ])
     else:
         tf_project_dir = "./IaC"
+
+        # Create Lambda ZIP files before Terraform
+        print("\n" + "="*80)
+        print("Creating Lambda function ZIP files...")
+        print("="*80)
+        lambda_functions = [
+            'get-spot-status-change',
+            'get-spot-rebalance',
+            'get-spot-interruption',
+            'log-instance-count',
+            'restart-closed-request'
+        ]
+
+        os.chdir(tf_project_dir)
+        # Source files are in the same IaC directory
+        for func in lambda_functions:
+            create_lambda_zip(func, ".")
+        os.chdir("..")
+
         session = boto3.Session(profile_name=awscli_profile, region_name=region)
         logs_client = session.client('logs')
         create_log_stream(log_group_name, log_stream_name_change_status, logs_client)
