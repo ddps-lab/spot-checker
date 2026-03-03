@@ -33,7 +33,13 @@ def lambda_handler(event, context):
     if not response['Reservations']:
         return
 
+    print("event", event)
+    print("response", response)
+    print("Reservations", response['Reservations'])
+
     instance = response['Reservations'][0]['Instances'][0]
+
+    print('instance', instance)
     spot_request_id = instance.get('SpotInstanceRequestId', '')
     az = instance['Placement']['AvailabilityZone']
     instance_type = instance['InstanceType']

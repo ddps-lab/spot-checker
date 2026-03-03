@@ -15,8 +15,6 @@ arm64_family = ['a1', 't4g', 'c6g', 'c6gd', 'c6gn', 'c7g', 'c7gd', 'c7gn', 'im4g
 prefix = variables.prefix
 
 instance_type = variables.instance_type
-region = variables.region
-az_id = variables.az_id
 iam_instance_profile_arn = variables.iam_instance_profile_arn
 
 wait_minutes = variables.wait_minutes
@@ -26,14 +24,8 @@ time_hours = variables.time_hours
 instance_family = instance_type.split('.')[0]
 instance_arch = 'arm' if (instance_family in arm64_family) else 'x86'
 
-az_name = az_map_dict[(region, az_id)]
 log_group_name = f"{prefix}-spot-checker-multinode-log"
 log_stream_name = f"{variables.log_stream_name_init_time}"
-ami_id = region_ami[instance_arch][region][0]
-launch_time = datetime.datetime.now() + datetime.timedelta(minutes=wait_minutes)
-launch_time = launch_time.astimezone(pytz.UTC)
-stop_time = datetime.datetime.now() + datetime.timedelta(hours=time_hours, minutes=(time_minutes + wait_minutes))
-stop_time = stop_time.astimezone(pytz.UTC)
 
 
 # userdata = """#!/bin/bash
@@ -61,48 +53,99 @@ stop_time = stop_time.astimezone(pytz.UTC)
 
 # userdata_encoded = base64.b64encode(userdata.encode()).decode()
 
-### Spot Launch Specifications
-launch_spec = {
-    'ImageId': ami_id,
-    'InstanceType': instance_type,
-    'Placement': {'AvailabilityZone': az_name},
-    'IamInstanceProfile': {
-            'Arn': iam_instance_profile_arn
-        },
-    # 'UserData': userdata_encoded,
-}
+regions = variables.region if isinstance(variables.region, list) else [variables.region]
+az_ids = variables.az_id if isinstance(variables.az_id, list) else [variables.az_id]
 
+if len(regions) != len(az_ids):
+    raise ValueError("The number of regions and az_ids in variables.py must match.")
 ### session & client
 session = boto3.session.Session(profile_name='default')
-ec2 = session.client('ec2', region_name=region)
-
-launch_info = [instance_type, instance_family, instance_arch, region, az_id, az_name, ami_id]
-print(f"""Instance Type: {instance_type}\nInstance Family: {instance_family}\nInstance Arhictecture: {instance_arch}
-Region: {region}\nAZ-ID: {az_id}\nAZ-Name:{az_name}\nAMI ID: {ami_id}""")
-
-spot_data_dict = {}
-spot_data_dict['launch_spec'] = launch_spec
-spot_data_dict['launch_info'] = launch_info
-spot_data_dict['start_time'] = launch_time
-spot_data_dict['end_time'] = stop_time
-
 
 ### Start Spot Checker
-def start_spot_checker(target_count):
-    for i in range(target_count):
-        create_request_response = ec2.request_spot_instances(
-            InstanceCount=1,
-            LaunchSpecification=launch_spec,
-            #     SpotPrice=spot_price, # default value for on-demand price
-            ValidFrom=launch_time,
-            ValidUntil=stop_time,
-            Type='persistent'  # not 'one-time', persistent request
+def start_spot_checker(ec2, launch_spec, target_count):
+    # Calculate fresh launch_time and stop_time for each region call
+    launch_time = datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(minutes=wait_minutes)
+    stop_time = datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(hours=time_hours, minutes=(time_minutes + wait_minutes))
+
+    print(f"DEBUG - launch_time type: {type(launch_time)}, value: {launch_time}")
+    print(f"DEBUG - stop_time type: {type(stop_time)}, value: {stop_time}")
+    print(f"DEBUG - stop_time - launch_time: {stop_time - launch_time}")
+
+    create_request_response = ec2.request_spot_instances(
+        InstanceCount=target_count,
+        LaunchSpecification=launch_spec,
+        #     SpotPrice=spot_price, # default value for on-demand price
+        Type='persistent',  # not 'one-time', persistent request
+        ValidFrom=launch_time,
+        ValidUntil=stop_time,
+        TagSpecifications=[
+            {
+                'ResourceType': 'spot-instances-request',
+                'Tags': [
+                    {'Key': 'Project', 'Value': 'spot-checker-multinode'},
+                    {'Key': 'Environment', 'Value': f'{prefix}-spot-test'}
+                ]
+            }
+        ]
+    )
+
+    # Extract SpotInstanceRequestIds
+    spot_request_ids = [req['SpotInstanceRequestId'] for req in create_request_response['SpotInstanceRequests']]
+    print(f"Spot requests created: {spot_request_ids}")
+
+    # Poll until instances are created
+    instance_ids = []
+    max_retries = 30
+    retry_count = 0
+
+    while len(instance_ids) < target_count and retry_count < max_retries:
+        response = ec2.describe_spot_instance_requests(SpotInstanceRequestIds=spot_request_ids)
+
+        for req in response['SpotInstanceRequests']:
+            if 'InstanceId' in req and req['InstanceId'] not in instance_ids:
+                instance_ids.append(req['InstanceId'])
+
+        if len(instance_ids) < target_count:
+            time.sleep(1)
+            retry_count += 1
+
+    # Apply tags to actual EC2 instances
+    if instance_ids:
+        ec2.create_tags(
+            Resources=instance_ids,
+            Tags=[
+                {'Key': 'Project', 'Value': 'spot-checker-multinode'},
+                {'Key': 'Environment', 'Value': f'{prefix}-spot-test'}
+            ]
         )
-        time.sleep(0.1)
-
-
+        print(f"Tags applied to instances: {instance_ids}")
 
 if __name__ == "__main__":
     instance_count = variables.instance_count
-    print(instance_count)
-    start_spot_checker(instance_count)
+    print(f"Target instance count per AZ: {instance_count}")
+    
+    for r, a in zip(regions, az_ids):
+        az_name_mapped = az_map_dict[(r, a)]
+        ami_id_mapped = region_ami[instance_arch][r][0]
+        
+        launch_spec = {
+            'ImageId': ami_id_mapped,
+            'InstanceType': instance_type,
+            'Placement': {'AvailabilityZone': az_name_mapped},
+            'IamInstanceProfile': {
+                'Arn': iam_instance_profile_arn
+            },
+        }
+        
+        print(f"""\n--- Launching in {r} ---
+            Instance Type: {instance_type}
+            Instance Family: {instance_family}
+            Instance Architecture: {instance_arch}
+            Region: {r}
+            AZ-ID: {a}
+            AZ-Name:{az_name_mapped}
+            AMI ID: {ami_id_mapped}"""
+        )
+
+        ec2 = session.client('ec2', region_name=r)
+        start_spot_checker(ec2, launch_spec, instance_count)

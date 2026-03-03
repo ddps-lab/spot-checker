@@ -1,11 +1,15 @@
 import boto3
 import os
+import sys
 from collections import defaultdict
 import time
 
 
+LOG_GROUP_NAME = os.environ['LOG_GROUP_NAME']
+EXP_SIZE = int(os.environ['EXP_SIZE'])
+IAM_INSTANCE_PROFILE_ARN = os.environ['IAM_INSTANCE_PROFILE_ARN']
+
 ec2_client = boto3.client('ec2')
-exp_size = int(os.getenv('EXP_SIZE'))
 
 def lambda_handler(event, context):
     count_dict = defaultdict(int)
@@ -64,8 +68,8 @@ def lambda_handler(event, context):
 
     print(count_dict)
     for (instance_type, az), count in count_dict.items():
-        if count < exp_size:
-            requests_needed = exp_size - count
+        if count < EXP_SIZE:
+            requests_needed = EXP_SIZE - count
             print(f"{requests_needed} instance missing.")
             print(f"Adding 1 spot requests for {instance_type} in {az}")
 
@@ -75,26 +79,33 @@ def lambda_handler(event, context):
             if not ami_id:
                 print(f"No AMI found for instance type {instance_type}. Skipping...")
 
-            # for _ in range(requests_needed):
-            for _ in range(1):
-                ec2_client.request_spot_instances(
-                    InstanceCount=1,
-                    Type="persistent",
-                    ValidUntil=valid_until,
-                    LaunchSpecification={
-                        'InstanceType': instance_type,
-                        'ImageId': ami_id,
-                        'Placement': {
-                            'AvailabilityZone': az
-                        },
-                        'IamInstanceProfile': {
-                            'Arn': 'arn:aws:iam::741926482963:instance-profile/EC2toEC2_CW' # IAM ARN for CloudWatch access
-                        },
-                        # ETC
+            ec2_client.request_spot_instances(
+                InstanceCount=requests_needed,
+                Type="persistent",
+                ValidUntil=valid_until,
+                LaunchSpecification={
+                    'InstanceType': instance_type,
+                    'ImageId': ami_id,
+                    'Placement': {
+                        'AvailabilityZone': az
+                    },
+                    'IamInstanceProfile': {
+                        'Arn': IAM_INSTANCE_PROFILE_ARN
+                    },
+                    # ETC
 
+                },
+                TagSpecifications=[
+                    {
+                        'ResourceType': 'spot-instances-request',
+                        'Tags': [
+                            {'Key': 'Project', 'Value': 'spot-checker-multinode'},
+                            {'Key': 'Environment', 'Value': 'spot-test'}
+                        ]
                     }
-                )
-                time.sleep(0.1)
+                ]
+            )
+            time.sleep(0.1)
 
     return {
         'statusCode': 200,

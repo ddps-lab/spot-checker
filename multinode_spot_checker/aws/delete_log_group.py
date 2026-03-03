@@ -35,10 +35,10 @@ def main():
             run_command(["terraform", "workspace", "delete", f"{r}-spot-checker-multinode"])
     
     else:
-        run_command(["terraform", "workspace", "select", "-or-create", f"{r}-spot-checker-multinode"])
+        run_command(["terraform", "workspace", "select", "-or-create", f"spot-checker-multinode"])
         run_command(["terraform", "destroy", "--auto-approve", "--var", f"region={region}", "--var", f"prefix={prefix}","--var", f"awscli_profile={awscli_profile}", "--var", f"log_group_name={log_group_name}"])
         run_command(["terraform", "workspace", "select", "default"])
-        run_command(["terraform", "workspace", "delete", f"{r}-spot-checker-multinode"])
+        run_command(["terraform", "workspace", "delete", f"spot-checker-multinode"])
 
 
 if __name__ == "__main__":

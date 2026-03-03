@@ -19,7 +19,7 @@ resource "aws_lambda_function" "lambda" {
   environment {
     variables = {
       LOG_GROUP_NAME    = var.log_group_name,
-      LOG_STREAM_NAME   = var.log_stream_name_chage_status,
+      LOG_STREAM_NAME   = var.log_stream_name_change_status,
     }
   }
 }

@@ -4,7 +4,7 @@ module "get-spot-status-change" {
   lambda_role_arn              = aws_iam_role.get-spot-status-change-lambda-role.arn
   log_group_name               = var.log_group_name
   log_stream_name_init_time    = var.log_stream_name_init_time
-  log_stream_name_chage_status = var.log_stream_name_chage_status
+  log_stream_name_change_status = var.log_stream_name_change_status
 }
 
 module "restart-closed-request" {
@@ -13,6 +13,7 @@ module "restart-closed-request" {
   lambda_role_arn              = aws_iam_role.restart-closed-request-lambda-role.arn
   log_group_name               = var.log_group_name
   experiment_size              = var.experiment_size
+  iam_instance_profile_arn     = var.iam_instance_profile_arn
 }
 
 module "get-spot-rebalance" {

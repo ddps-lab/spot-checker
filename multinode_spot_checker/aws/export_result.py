@@ -135,7 +135,7 @@ def main():
     awscli_profile = variables.awscli_profile
     prefix = variables.prefix
     log_group_name = f"{prefix}-spot-checker-multinode-log"
-    change_log_stream_name = variables.log_stream_name_chage_status
+    change_log_stream_name = variables.log_stream_name_change_status
     init_log_stream_name = variables.log_stream_name_init_time
 
     start_time = input("Enter the log start time ex)2020-10-10 10:10 : ")

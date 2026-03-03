@@ -19,7 +19,7 @@ variable "log_group_name" {
   default = ""
 }
 
-variable "log_stream_name_chage_status" {
+variable "log_stream_name_change_status" {
   type = string
   default = ""
 }
@@ -62,4 +62,9 @@ variable "count_interval_minutes" {
 variable "recent_window_minutes" {
   type = string
   default = "10"
+}
+
+variable "iam_instance_profile_arn" {
+  type = string
+  default = ""
 }

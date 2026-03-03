@@ -19,7 +19,8 @@ resource "aws_lambda_function" "lambda" {
 
   environment {
     variables = {
-      EXP_SIZE      = var.experiment_size
+      EXP_SIZE                 = var.experiment_size
+      IAM_INSTANCE_PROFILE_ARN = var.iam_instance_profile_arn
     }
   }
 }
