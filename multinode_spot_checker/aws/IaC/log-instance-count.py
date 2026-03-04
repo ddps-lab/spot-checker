@@ -53,7 +53,7 @@ def lambda_handler(event, context):
 
     for page in instance_paginator.paginate(
         Filters=[
-            {'Name': 'instance-state-name', 'Values': ['running']},
+            {'Name': 'instance-state-name', 'Values': ['running', 'terminated']},
             {'Name': 'instance-lifecycle', 'Values': ['spot']},
             {'Name': 'tag:Environment', 'Values': [f'{PREFIX}-spot-test']}
         ]
@@ -62,6 +62,7 @@ def lambda_handler(event, context):
             for instance in reservation.get('Instances', []):
                 instance_type = instance['InstanceType']
                 az = instance['Placement']['AvailabilityZone']
+                state = instance['State']['Name']
                 count_dict[(instance_type, az)] += 1
 
     for (instance_type, az), count in count_dict.items():
