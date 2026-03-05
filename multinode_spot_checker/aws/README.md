@@ -58,9 +58,6 @@ python3 fis_tester.py --action run --experiment-type instance-reboot
 4. Lambda 함수가 EventBridge로 변화 감지
 5. CloudWatch Logs에 이벤트 기록
 
-### FIS 결과 수집
-`python3 fis_tester.py --action collect-logs`를 실행하여 실험 중 발생한 로그를 수집합니다.
-
 ---
 
 ## 실험 종료 후

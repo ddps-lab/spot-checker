@@ -58,7 +58,7 @@ def change_log_parse_log_data_to_csv(input_file, output_file):
 
     with open(output_file, 'w', newline='') as f:
         writer = csv.writer(f)
-        writer.writerow(["Timestamp", "SpotRequestId", "InstanceState", "InstanceType", "AZ", "Code", "Message", "UpdateTime"])  # 헤더
+        writer.writerow(["Timestamp", "SpotRequestId", "InstanceState", "InstanceType", "AZ", "Code", "Message"])  # 헤더
 
         for line in lines:
             log_timestamp, log_data = line.split(' ', 1)
@@ -176,6 +176,8 @@ def download_result(s3_client, bucket_name, log_stream_name, log_type, region, r
 def process_region(region, awscli_profile, prefix, log_group_name, change_log_stream_name, rebalance_log_stream_name, interruption_log_stream_name, count_log_stream_name, milliseconds_start_time, milliseconds_end_time, result_folder_path):
     """각 region의 데이터를 병렬로 처리"""
     try:
+        # region 별로 session을 따로 생성,
+        # region config에 혼동이 올까봐 session 공유 방지
         boto3_session = boto3.Session(profile_name=awscli_profile, region_name=region)
         s3_resource = boto3_session.resource('s3')
         s3_client = boto3_session.client('s3')
@@ -232,13 +234,16 @@ def main():
         shutil.rmtree('/tmp/spot-availability-test')
 
     global result_folder_path
-    while True:
-        current_date = datetime.now()
-        formatted_date = current_date.strftime("%Y-%m-%d")
-        result_folder_path = f"{formatted_date}-{random_string()}"
-        if not os.path.exists(f'./result_data/{result_folder_path}'):
-            os.makedirs(f'./result_data/{result_folder_path}')
-            break
+    current_date = datetime.now()
+    formatted_date = current_date.strftime("%Y-%m-%d")
+
+    # 타임스탐프 기반 폴더명 (unique하고 많은 폴더 방지)
+    timestamp = current_date.strftime("%Y-%m-%d-%H%M%S")  # 2026-03-05-101530
+    result_folder_path = timestamp
+
+    # 폴더 생성 (존재하면 덮어쓰기)
+    os.makedirs(f'./result_data/{result_folder_path}', exist_ok=True)
+
 
     # Parallel: Process each region concurrently
     print("="*80)
