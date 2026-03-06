@@ -34,13 +34,29 @@ def main():
             )
 
             instance_ids_to_terminate = []
+            spot_request_ids_to_cancel = []
 
-            # Extract all instance IDs from reservations
+            # Extract all instance IDs and Spot Request IDs from reservations
             for reservation in response.get('Reservations', []):
                 for instance in reservation.get('Instances', []):
                     instance_ids_to_terminate.append(instance['InstanceId'])
 
-            # 2. EC2 인스턴스 종료
+                    # Get SpotInstanceRequestId if available
+                    spot_request_id = instance.get('SpotInstanceRequestId')
+                    if spot_request_id:
+                        spot_request_ids_to_cancel.append(spot_request_id)
+
+            # 2. Spot Instance Request 취소 (ValidUntil이 길게 남아있을 수 있음)
+            if spot_request_ids_to_cancel:
+                print(f"  > Cancelling {len(spot_request_ids_to_cancel)} Spot Request(s)...")
+                try:
+                    ec2_client.cancel_spot_instance_requests(SpotInstanceRequestIds=spot_request_ids_to_cancel)
+                    for rid in spot_request_ids_to_cancel:
+                        print(f"    - Cancelled Request: {rid}")
+                except Exception as e:
+                    print(f"    ⚠️  Warning cancelling requests: {e}")
+
+            # 3. EC2 인스턴스 종료
             if instance_ids_to_terminate:
                 print(f"  > Terminating {len(instance_ids_to_terminate)} Spot Instance(s)...")
                 ec2_client.terminate_instances(InstanceIds=instance_ids_to_terminate)

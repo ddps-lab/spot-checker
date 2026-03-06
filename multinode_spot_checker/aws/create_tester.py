@@ -68,6 +68,7 @@ def main():
     log_stream_name_interruption = f"{variables.log_stream_name_interruption}"
     log_stream_name_count = f"{variables.log_stream_name_count}"
     log_stream_name_placement_failed = f"{variables.log_stream_name_placement_failed}"
+    log_stream_name_imds_monitor = f"{variables.log_stream_name_imds_monitor}"
     experiment_size = f"{variables.instance_count}"
     iam_instance_profile_arn = f"{variables.iam_instance_profile_arn}"
     count_interval_minutes = f"{variables.count_interval_minutes}"
@@ -105,12 +106,17 @@ def main():
         for r in region:
             session = boto3.Session(profile_name=awscli_profile, region_name=r)
             logs_client = session.client('logs')
+
+            # Spot Checker Log Streams
             create_log_stream(log_group_name, log_stream_name_change_status, logs_client)
             create_log_stream(log_group_name, log_stream_name_init_time, logs_client)
             create_log_stream(log_group_name, log_stream_name_rebalance, logs_client)
             create_log_stream(log_group_name, log_stream_name_interruption, logs_client)
             create_log_stream(log_group_name, log_stream_name_count, logs_client)
             create_log_stream(log_group_name, log_stream_name_placement_failed, logs_client)
+
+            # IMDS Monitor Log Stream (in existing log group)
+            create_log_stream(log_group_name, log_stream_name_imds_monitor, logs_client)
 
             run_command(["terraform", "workspace", "select", "-or-create", f"{r}-spot-checker-multinode"])
             run_command(["terraform", "init"])
@@ -163,12 +169,18 @@ def main():
 
         session = boto3.Session(profile_name=awscli_profile, region_name=region)
         logs_client = session.client('logs')
+
+        # Spot Checker Log Streams
         create_log_stream(log_group_name, log_stream_name_change_status, logs_client)
         create_log_stream(log_group_name, log_stream_name_init_time, logs_client)
         create_log_stream(log_group_name, log_stream_name_rebalance, logs_client)
         create_log_stream(log_group_name, log_stream_name_interruption, logs_client)
         create_log_stream(log_group_name, log_stream_name_count, logs_client)
         create_log_stream(log_group_name, log_stream_name_placement_failed, logs_client)
+
+        # IMDS Monitor Log Stream (in existing log group)
+        create_log_stream(log_group_name, log_stream_name_imds_monitor, logs_client)
+
         os.chdir(tf_project_dir)
 
         run_command(["terraform", "workspace", "select", "-or-create", "spot-checker-multinode"])

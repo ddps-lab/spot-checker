@@ -1,10 +1,10 @@
-import pytz
 import time
 import boto3
 import pickle
 import datetime
 import base64
 import variables
+import os
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 ### Spot Checker Mapping Data
@@ -27,97 +27,140 @@ instance_arch = 'arm' if (instance_family in arm64_family) else 'x86'
 
 log_group_name = f"{prefix}-spot-checker-multinode-log"
 log_stream_name = f"{variables.log_stream_name_init_time}"
-
-
-# userdata = """#!/bin/bash
-# current_time=$(date +%s)
-# current_time_ms=$((current_time * 1000))
-# INSTANCE_ID=$(ec2-metadata -i | cut -d " " -f 2)
-# INSTANCE_TYPE=$(ec2-metadata -t | cut -d " " -f 2)
-# INSTANCE_AZ=$(ec2-metadata -z | cut -d " " -f 2)
-# SPOT_REQUEST_ID=$(aws ec2 describe-instances --instance-ids $INSTANCE_ID --query 'Reservations[].Instances[].SpotInstanceRequestId' --region %s --output text)
-# SPOT_VALID_FROM=$(aws ec2 describe-spot-instance-requests --spot-instance-request-ids $SPOT_REQUEST_ID --query 'SpotInstanceRequests[*].{ValidFrom:ValidFrom}' --region %s --output text)
-
-# log_event=$(cat <<EOF
-# [
-#     {
-#         "timestamp": ${current_time_ms},
-#         "message": "{\\"timestamp\\": \\"${current_time_ms}\\", \\"instance_id\\": \\"${INSTANCE_ID}\\", \\"instance_type\\": \\"${INSTANCE_TYPE}\\", \\"spot_request_id\\": \\"${SPOT_REQUEST_ID}\\", \\"az\\": \\"${INSTANCE_AZ}\\", \\"vail_from\\": \\"${SPOT_VALID_FROM}\\"}"
-#     }
-# ]
-# EOF
-# )
-# aws logs put-log-events --log-group-name %s --log-stream-name %s --log-events "$log_event" --region %s
-# sudo shutdown -P +%s
-
-# """ % ("%s", region, region, log_group_name, log_stream_name, region, time_minutes)
-
-# userdata_encoded = base64.b64encode(userdata.encode()).decode()
+log_stream_name_imds = f"{variables.log_stream_name_imds_monitor}"
 
 regions = variables.region if isinstance(variables.region, list) else [variables.region]
 az_ids = variables.az_id if isinstance(variables.az_id, list) else [variables.az_id]
 
 if len(regions) != len(az_ids):
     raise ValueError("The number of regions and az_ids in variables.py must match.")
-### session & client
+
 session = boto3.session.Session(profile_name='default')
 
-### Start Spot Checker
+def get_imds_monitor_userdata(log_group_name, log_stream_name):
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    imds_monitor_path = os.path.join(script_dir, 'imds_monitor.py')
+
+    if not os.path.exists(imds_monitor_path):
+        print(f"Warning: {imds_monitor_path} not found, IMDS monitor will not be included")
+        return None
+
+    with open(imds_monitor_path, 'r') as f:
+        imds_monitor_code = f.read()
+
+    imds_monitor_code_b64 = base64.b64encode(imds_monitor_code.encode()).decode()
+
+    userdata_script = f"""#!/bin/bash
+set -e
+if [ -f /etc/os-release ]; then
+    . /etc/os-release
+    OS=${{ID}}
+else
+    OS="unknown"
+fi
+case "$OS" in
+    ubuntu|debian)
+        apt-get update -qq
+        apt-get install -y -qq python3-pip > /dev/null 2>&1
+        ;;
+    amzn|amazonlinux)
+        yum update -y > /dev/null 2>&1
+        yum install -y python3-pip > /dev/null 2>&1
+        ;;
+    rhel|centos)
+        yum update -y > /dev/null 2>&1
+        yum install -y python3-pip > /dev/null 2>&1
+        ;;
+    *)
+        apt-get update -qq
+        apt-get install -y -qq python3-pip > /dev/null 2>&1
+        ;;
+esac
+pip3 install -q 'urllib3<2' 'requests>=2.28' boto3
+echo "{imds_monitor_code_b64}" | base64 -d > /opt/imds_monitor.py
+chmod +x /opt/imds_monitor.py
+export IMDS_LOG_GROUP="{log_group_name}"
+export IMDS_LOG_STREAM="{log_stream_name}"
+nohup python3 /opt/imds_monitor.py > /var/log/imds_monitor.log 2>&1 &
+"""
+
+    userdata_encoded = base64.b64encode(userdata_script.encode()).decode()
+    return userdata_encoded
+
+
 def start_spot_checker(ec2, launch_spec, target_count):
-    # Calculate fresh launch_time and stop_time for each region call
     launch_time = datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(minutes=wait_minutes)
     stop_time = datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(hours=time_hours, minutes=(time_minutes + wait_minutes))
 
-    print(f"DEBUG - launch_time type: {type(launch_time)}, value: {launch_time}")
-    print(f"DEBUG - stop_time type: {type(stop_time)}, value: {stop_time}")
+    print(f"DEBUG - launch_time {launch_time}")
+    print(f"DEBUG - stop_time {stop_time}")
     print(f"DEBUG - stop_time - launch_time: {stop_time - launch_time}")
 
-    create_request_response = ec2.request_spot_instances(
-        InstanceCount=target_count,
-        LaunchSpecification=launch_spec,
-        #     SpotPrice=spot_price, # default value for on-demand price
-        Type='persistent',  # not 'one-time', persistent request
-        ValidFrom=launch_time,
-        ValidUntil=stop_time,
-        TagSpecifications=[
+    userdata_b64 = get_imds_monitor_userdata(log_group_name, log_stream_name_imds)
+
+    print(f"\nLaunching {target_count} Spot instance(s)...")
+    run_instances_params = {
+        'ImageId': launch_spec['ImageId'],
+        'InstanceType': launch_spec['InstanceType'],
+        'MinCount': target_count,
+        'MaxCount': target_count,
+        'Placement': launch_spec['Placement'],
+        'IamInstanceProfile': launch_spec['IamInstanceProfile'],
+        'InstanceMarketOptions': {
+            'MarketType': 'spot',
+            'SpotOptions': {
+                'SpotInstanceType': 'persistent',
+                'InstanceInterruptionBehavior': 'stop',
+                'ValidUntil': stop_time
+            }
+        },
+        'TagSpecifications': [
             {
-                'ResourceType': 'spot-instances-request',
+                'ResourceType': 'instance',
                 'Tags': [
                     {'Key': 'Project', 'Value': 'spot-checker-multinode'},
                     {'Key': 'Environment', 'Value': f'{prefix}-spot-test'}
                 ]
             }
-        ]
-    )
+        ],
+        'MetadataOptions': {
+            'HttpTokens': 'required',
+            'HttpPutResponseHopLimit': 1,
+            'HttpEndpoint': 'enabled'
+        }
+    }
 
-    # Extract SpotInstanceRequestIds
-    spot_request_ids = [req['SpotInstanceRequestId'] for req in create_request_response['SpotInstanceRequests']]
-    print(f"Spot requests created: {spot_request_ids}")
+    if userdata_b64:
+        run_instances_params['UserData'] = userdata_b64
 
-    # Poll until instances are created
-    instance_ids = []
+    response = ec2.run_instances(**run_instances_params)
+    instance_ids = [inst['InstanceId'] for inst in response['Instances']]
+
+    print(f"✓ Spot instances launched: {instance_ids}")
+
     max_retries = 180
     retry_count = 0
 
-    print(f"Polling for instances (max {max_retries}s)...")
-    while len(instance_ids) < target_count and retry_count < max_retries:
-        response = ec2.describe_spot_instance_requests(SpotInstanceRequestIds=spot_request_ids)
+    print(f"Waiting for instances to reach 'running' state (max {max_retries}s)...")
+    while retry_count < max_retries:
+        describe_response = ec2.describe_instances(InstanceIds=instance_ids)
+        running_ids = []
 
-        for req in response['SpotInstanceRequests']:
-            state = req.get('Status', {}).get('Code', 'unknown')
-            if 'InstanceId' in req and req['InstanceId'] not in instance_ids:
-                instance_ids.append(req['InstanceId'])
-                print(f"  Instance found: {req['InstanceId']} (state: {state})")
-            elif retry_count % 30 == 0:  # Log status every 30s
-                print(f"  Request {req['SpotInstanceRequestId']}: state={state}, instances={len(instance_ids)}/{target_count}")
+        for reservation in describe_response['Reservations']:
+            for instance in reservation['Instances']:
+                if instance['State']['Name'] == 'running':
+                    running_ids.append(instance['InstanceId'])
+                    print(f"  ✓ Instance {instance['InstanceId']} is running")
+                elif retry_count % 30 == 0:
+                    print(f"  ℹ Instance {instance['InstanceId']}: {instance['State']['Name']}")
 
-        if len(instance_ids) < target_count:
-            time.sleep(1)
-            retry_count += 1
+        if len(running_ids) == target_count:
+            print(f"✓ All {target_count} instances are running")
+            break
 
-    print(f"Polling complete: found {len(instance_ids)}/{target_count} instances after {retry_count}s")
+        time.sleep(1)
+        retry_count += 1
 
-    # Apply tags to actual EC2 instances
     if instance_ids:
         try:
             ec2.create_tags(
@@ -127,14 +170,13 @@ def start_spot_checker(ec2, launch_spec, target_count):
                     {'Key': 'Environment', 'Value': f'{prefix}-spot-test'}
                 ]
             )
-            print(f"✓ Tags applied to instances: {instance_ids}")
+            print(f"✓ Tags verified on instances: {instance_ids}")
         except Exception as e:
             print(f"✗ Error applying tags: {e}")
     else:
-        print(f"✗ No instances found after {max_retries}s. Spot requests may still be pending.")
+        print(f"✗ No instances created")
 
 def launch_in_region(r, a, instance_count):
-    """Launch Spot instances in a specific region (to be executed in parallel)."""
     az_name_mapped = az_map_dict[(r, a)]
     ami_id_mapped = region_ami[instance_arch][r][0]
 
