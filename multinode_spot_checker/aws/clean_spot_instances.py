@@ -3,10 +3,10 @@ import variables
 
 def main():
     regions = variables.region if isinstance(variables.region, list) else [variables.region]
-    
+
     print("=" * 60)
     print("SPOT INSTANCE CLEANER (Multi-Region)")
-    print("Targeting Spot Requests with Tag: Project=spot-checker-multinode")
+    print(f"Targeting EC2 Instances with Tag: Environment={variables.prefix}-spot-test")
     print("=" * 60)
 
     for r in regions:
@@ -14,53 +14,41 @@ def main():
         try:
             session = boto3.Session(profile_name=variables.awscli_profile, region_name=r)
             ec2_client = session.client('ec2')
-            
-            # 1. 활성화된 스팟 요청 검색 (태그 기반 필터링)
-            response = ec2_client.describe_spot_instance_requests(
+
+            # 1. 태그된 Spot 인스턴스 검색
+            response = ec2_client.describe_instances(
                 Filters=[
                     {
                         'Name': 'tag:Environment',
                         'Values': [f'{variables.prefix}-spot-test']
                     },
                     {
-                        'Name': 'state',
-                        'Values': ['open', 'active', 'failed']
+                        'Name': 'instance-lifecycle',
+                        'Values': ['spot']
+                    },
+                    {
+                        'Name': 'instance-state-name',
+                        'Values': ['running', 'stopped', 'pending']
                     }
                 ]
             )
-            
-            spot_requests = response.get('SpotInstanceRequests', [])
-            
-            req_ids_to_cancel = []
+
             instance_ids_to_terminate = []
-            
-            for req in spot_requests:
-                req_id = req['SpotInstanceRequestId']
-                req_ids_to_cancel.append(req_id)
-                
-                # 이미 인스턴스가 켜져 있다면 (InstanceId가 존재한다면) 해지 리스트에 추가
-                instance_id = req.get('InstanceId')
-                if instance_id:
-                    instance_ids_to_terminate.append(instance_id)
 
-            # 2. 스팟 요청 취소 (Cancel Requests)
-            if req_ids_to_cancel:
-                print(f"  > Cancelling {len(req_ids_to_cancel)} Spot Requests...")
-                ec2_client.cancel_spot_instance_requests(SpotInstanceRequestIds=req_ids_to_cancel)
-                for rid in req_ids_to_cancel:
-                    print(f"    - Canceled: {rid}")
-            else:
-                print("  > No matching Spot Requests found.")
+            # Extract all instance IDs from reservations
+            for reservation in response.get('Reservations', []):
+                for instance in reservation.get('Instances', []):
+                    instance_ids_to_terminate.append(instance['InstanceId'])
 
-            # 3. 켜져 있는 EC2 인스턴스 강제 종료 (Terminate Instances)
+            # 2. EC2 인스턴스 종료
             if instance_ids_to_terminate:
-                print(f"  > Terminating {len(instance_ids_to_terminate)} running Instances...")
+                print(f"  > Terminating {len(instance_ids_to_terminate)} Spot Instance(s)...")
                 ec2_client.terminate_instances(InstanceIds=instance_ids_to_terminate)
                 for iid in instance_ids_to_terminate:
                     print(f"    - Terminated: {iid}")
             else:
-                print("  > No running Instances to terminate.")
-                
+                print("  > No matching Spot Instances found.")
+
         except Exception as e:
             print(f"ERROR in region {r}: {e}")
 
@@ -69,7 +57,7 @@ def main():
     print("=" * 60)
 
 if __name__ == "__main__":
-    confirm = input("This will CANCEL Spot Requests and TERMINATE running instances! Proceed? (y/n): ")
+    confirm = input("This will TERMINATE all tagged Spot instances! Proceed? (y/n): ")
     if confirm.lower() == 'y':
         main()
     else:
