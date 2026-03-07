@@ -54,13 +54,14 @@ def main():
  iid=get_instance_id(tk)
  rg=get_region_from_imds(tk)
  print(f"[IMDS] Instance: {iid} in {rg}")
- i=5
- mx=720
+ i=1
+ mx=7200
  a=0
  rd=ad=False
+ tk_age=0
  while a<mx:
   try:
-   if a%200==0:tk=get_imds_token()
+   if a%21600==0:tk=get_imds_token();tk_age=0
    if not rd:
     rb=get_rebalance_event(tk)
     if rb:
@@ -76,7 +77,8 @@ def main():
      break
    time.sleep(i)
    a+=1
-   if a%24==0:print(f"[IMDS] Monitoring... {a*i}s")
+   tk_age+=1
+   if a%300==0:print(f"[IMDS] Monitoring... {a*i}s elapsed")
   except KeyboardInterrupt:break
   except Exception as e:
    time.sleep(i)
