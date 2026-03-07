@@ -106,6 +106,16 @@ def start_spot_checker(ec2, launch_spec, target_count):
         'MaxCount': target_count,
         'Placement': launch_spec['Placement'],
         'IamInstanceProfile': launch_spec['IamInstanceProfile'],
+        'BlockDeviceMappings': [
+            {
+                'DeviceName': '/dev/xvda',
+                'Ebs': {
+                    'VolumeSize': 8,
+                    'VolumeType': 'gp2',
+                    'DeleteOnTermination': True
+                }
+            }
+        ],
         'InstanceMarketOptions': {
             'MarketType': 'spot',
             'SpotOptions': {
