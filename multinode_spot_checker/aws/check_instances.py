@@ -53,10 +53,17 @@ def check_region(region_name):
                 for request in spot_response.get('SpotInstanceRequests', []):
                     inst_id = request.get('InstanceId')
                     if inst_id:
+                        status_info = request.get('Status', {})
+                        launch_spec = request.get('LaunchSpecification', {})
                         spot_requests[inst_id] = {
                             'valid_until': request.get('ValidUntil'),
                             'spot_request_id': request.get('SpotInstanceRequestId'),
-                            'status': request.get('Status', {}).get('Code')
+                            'status_code': status_info.get('Code'),
+                            'status_message': status_info.get('Message', ''),
+                            'interruption_behavior': launch_spec.get('InstanceInterruptionBehavior', 'N/A'),
+                            'price': request.get('SpotPrice'),
+                            'request_status': request.get('Status', {}),
+                            'request_state': request.get('State')
                         }
             except Exception as e:
                 pass  # Skip if Spot Request info is not available
@@ -96,6 +103,13 @@ def format_instance_info(instance):
     else:
         valid_until_str = 'N/A'
 
+    spot_request_id = spot_info.get('spot_request_id', 'N/A')
+    spot_status_code = spot_info.get('status_code', 'N/A')
+    spot_status_message = spot_info.get('status_message', '')
+    interruption_behavior = spot_info.get('interruption_behavior', 'N/A')
+    spot_price = spot_info.get('price', 'N/A')
+    request_state = spot_info.get('request_state', 'N/A')
+
     return {
         'id': instance_id,
         'type': instance_type,
@@ -106,6 +120,12 @@ def format_instance_info(instance):
         'lifecycle': lifecycle,
         'subnet_id': subnet_id,
         'security_groups': sg_ids,
+        'spot_request_id': spot_request_id,
+        'spot_status_code': spot_status_code,
+        'spot_status_message': spot_status_message,
+        'request_state': request_state,
+        'interruption_behavior': interruption_behavior,
+        'spot_price': spot_price,
         'tags': tags
     }
 
@@ -172,9 +192,38 @@ def main():
                 'terminating': '⟳'
             }.get(info['state'], '?')
 
-            print(f"  {state_symbol} {info['id']:<19} | Type: {info['type']:<12} | State: {info['state']:<12} | AZ: {info['az']}")
-            print(f"    Lifecycle: {info['lifecycle']:<15} | Launched: {info['launch_time']}")
+            # Spot Request Status symbol
+            spot_status_symbol = {
+                'active': '●',
+                'disabled': '◇',
+                'cancelled-terminating': '⚠',
+                'cancelled-running': '⚠',
+                'cancelled': '◐',
+                'failed': '✗'
+            }.get(info['spot_status_code'], '?')
+
+            # Spot Request State symbol (lifecycle of the request)
+            spot_state_symbol = {
+                'pending-evaluation': '⧗',
+                'pending-fulfillment': '◐',
+                'fulfilled': '✓',
+                'failed': '✗',
+                'cancelled-running': '⚠',
+                'cancelled-terminating': '⚠',
+                'cancelled': '◐'
+            }.get(info['request_state'], '?')
+
+            print(f"  {state_symbol} {info['id']:<19} | Type: {info['type']:<12} | Instance State: {info['state']:<12} | AZ: {info['az']}")
+            print(f"    Instance Lifecycle: {info['lifecycle']:<15} | Launched: {info['launch_time']}")
             print(f"    Valid Until: {info['valid_until']:<30} | Subnet: {info['subnet_id']}")
+
+            # Display Spot Request info prominently (both Status and State)
+            print(f"    {spot_status_symbol} Spot Request ID: {info['spot_request_id']:<30} | Status: {info['spot_status_code']}")
+            print(f"    {spot_state_symbol} Request State: {info['request_state']:<45} | Interruption: {info['interruption_behavior']}")
+            print(f"      Spot Price: {info['spot_price']}")
+            if info['spot_status_message']:
+                print(f"      Status Message: {info['spot_status_message']}")
+
             print(f"    Security Groups: {', '.join(info['security_groups']) if info['security_groups'] else 'N/A'}")
 
             # Display tags
