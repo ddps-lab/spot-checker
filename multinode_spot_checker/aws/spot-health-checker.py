@@ -2,9 +2,7 @@ import time
 import boto3
 import pickle
 import datetime
-import base64
 import variables
-import os
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 ### Spot Checker Mapping Data
@@ -37,57 +35,6 @@ if len(regions) != len(az_ids):
 
 session = boto3.session.Session(profile_name='default')
 
-def get_imds_monitor_userdata(log_group_name, log_stream_name):
-    script_dir = os.path.dirname(os.path.abspath(__file__))
-    imds_monitor_path = os.path.join(script_dir, 'imds_monitor.py')
-
-    if not os.path.exists(imds_monitor_path):
-        print(f"Warning: {imds_monitor_path} not found, IMDS monitor will not be included")
-        return None
-
-    with open(imds_monitor_path, 'r') as f:
-        imds_monitor_code = f.read()
-
-    imds_monitor_code_b64 = base64.b64encode(imds_monitor_code.encode()).decode()
-
-    userdata_script = f"""#!/bin/bash
-set -e
-if [ -f /etc/os-release ]; then
-    . /etc/os-release
-    OS=${{ID}}
-else
-    OS="unknown"
-fi
-case "$OS" in
-    ubuntu|debian)
-        apt-get update -qq
-        apt-get install -y -qq python3-pip > /dev/null 2>&1
-        ;;
-    amzn|amazonlinux)
-        yum update -y > /dev/null 2>&1
-        yum install -y python3-pip > /dev/null 2>&1
-        ;;
-    rhel|centos)
-        yum update -y > /dev/null 2>&1
-        yum install -y python3-pip > /dev/null 2>&1
-        ;;
-    *)
-        apt-get update -qq
-        apt-get install -y -qq python3-pip > /dev/null 2>&1
-        ;;
-esac
-pip3 install -q 'urllib3<2' 'requests>=2.28' boto3
-echo "{imds_monitor_code_b64}" | base64 -d > /opt/imds_monitor.py
-chmod +x /opt/imds_monitor.py
-export IMDS_LOG_GROUP="{log_group_name}"
-export IMDS_LOG_STREAM="{log_stream_name}"
-nohup python3 /opt/imds_monitor.py > /var/log/imds_monitor.log 2>&1 &
-"""
-
-    userdata_encoded = base64.b64encode(userdata_script.encode()).decode()
-    return userdata_encoded
-
-
 def start_spot_checker(ec2, launch_spec, target_count):
     launch_time = datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(minutes=wait_minutes)
     stop_time = datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(hours=time_hours, minutes=(time_minutes + wait_minutes))
@@ -95,8 +42,6 @@ def start_spot_checker(ec2, launch_spec, target_count):
     print(f"DEBUG - launch_time {launch_time}")
     print(f"DEBUG - stop_time {stop_time}")
     print(f"DEBUG - stop_time - launch_time: {stop_time - launch_time}")
-
-    userdata_b64 = get_imds_monitor_userdata(log_group_name, log_stream_name_imds)
 
     print(f"\nLaunching {target_count} Spot instance(s)...")
     run_instances_params = {
@@ -139,9 +84,6 @@ def start_spot_checker(ec2, launch_spec, target_count):
             'HttpEndpoint': 'enabled'
         }
     }
-
-    if userdata_b64:
-        run_instances_params['UserData'] = userdata_b64
 
     response = ec2.run_instances(**run_instances_params)
     instance_ids = [inst['InstanceId'] for inst in response['Instances']]
