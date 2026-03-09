@@ -183,43 +183,13 @@ def main():
         for instance in instances:
             info = format_instance_info(instance)
 
-            # Color code state
-            state_symbol = {
-                'running': '✓',
-                'stopped': '⊗',
-                'stopping': '⟳',
-                'terminated': '✗',
-                'terminating': '⟳'
-            }.get(info['state'], '?')
-
-            # Spot Request Status symbol
-            spot_status_symbol = {
-                'active': '●',
-                'disabled': '◇',
-                'cancelled-terminating': '⚠',
-                'cancelled-running': '⚠',
-                'cancelled': '◐',
-                'failed': '✗'
-            }.get(info['spot_status_code'], '?')
-
-            # Spot Request State symbol (lifecycle of the request)
-            spot_state_symbol = {
-                'pending-evaluation': '⧗',
-                'pending-fulfillment': '◐',
-                'fulfilled': '✓',
-                'failed': '✗',
-                'cancelled-running': '⚠',
-                'cancelled-terminating': '⚠',
-                'cancelled': '◐'
-            }.get(info['request_state'], '?')
-
-            print(f"  {state_symbol} {info['id']:<19} | Type: {info['type']:<12} | Instance State: {info['state']:<12} | AZ: {info['az']}")
+            print(f"  [{info['state']:<12}] {info['id']:<19} | Type: {info['type']:<12} | AZ: {info['az']}")
             print(f"    Instance Lifecycle: {info['lifecycle']:<15} | Launched: {info['launch_time']}")
             print(f"    Valid Until: {info['valid_until']:<30} | Subnet: {info['subnet_id']}")
 
-            # Display Spot Request info prominently (both Status and State)
-            print(f"    {spot_status_symbol} Spot Request ID: {info['spot_request_id']:<30} | Status: {info['spot_status_code']}")
-            print(f"    {spot_state_symbol} Request State: {info['request_state']:<45} | Interruption: {info['interruption_behavior']}")
+            # Display Spot Request info (both Status and State)
+            print(f"    Spot Request ID: {info['spot_request_id']:<30} | Status: {info['spot_status_code']}")
+            print(f"    Request State: {info['request_state']:<45} | Interruption: {info['interruption_behavior']}")
             print(f"      Spot Price: {info['spot_price']}")
             if info['spot_status_message']:
                 print(f"      Status Message: {info['spot_status_message']}")
@@ -247,11 +217,11 @@ def main():
 
     # Cleanup recommendations
     if total_count > 0:
-        print("\n⚠️  Cleanup commands:")
+        print("\n[WARNING] Cleanup commands:")
         print(f"  Terminate all: uv run clean_spot_instances.py")
         print(f"  Check details: aws ec2 describe-instances --filters \"Name=tag:Environment,Values={ENVIRONMENT_TAG}\" --region <region>")
     else:
-        print("\n✓ No instances to clean up")
+        print("\n[OK] No instances to clean up")
 
 
 if __name__ == "__main__":

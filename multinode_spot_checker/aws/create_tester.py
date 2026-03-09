@@ -12,7 +12,7 @@ def create_lambda_zip(function_name, source_dir):
 
     # Check if file exists
     if not os.path.exists(py_filename):
-        print(f"  ✗ Error: {py_filename} not found")
+        print(f"  [ERROR] {py_filename} not found")
         return False
 
     # Remove old ZIP if exists
@@ -23,10 +23,10 @@ def create_lambda_zip(function_name, source_dir):
     try:
         with zipfile.ZipFile(zip_filename, 'w', zipfile.ZIP_DEFLATED) as zipf:
             zipf.write(py_filename, arcname=f"{function_name}.py")
-        print(f"  ✓ Created {zip_filename}")
+        print(f"  [OK] Created {zip_filename}")
         return True
     except Exception as e:
-        print(f"  ✗ Error creating {zip_filename}: {e}")
+        print(f"  [ERROR] Error creating {zip_filename}: {e}")
         return False
 
 def run_command(command):
@@ -126,7 +126,7 @@ def main():
             print(f"  - 5 Lambda modules (get-spot-status-change, get-spot-rebalance, etc.)")
             print(f"  - FIS IAM Role (for experiment templates)")
             print(f"  - CloudWatch events & Log streams")
-            print(f"\n⚠️  FIS experiment templates will be created separately:")
+            print(f"\n[INFO] FIS experiment templates will be created separately:")
             print(f"    uv run fis_tester.py --action setup")
             print(f"{'='*80}\n")
 

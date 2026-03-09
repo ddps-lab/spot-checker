@@ -54,7 +54,7 @@ def main():
                     for rid in spot_request_ids_to_cancel:
                         print(f"    - Cancelled Request: {rid}")
                 except Exception as e:
-                    print(f"    ⚠️  Warning cancelling requests: {e}")
+                    print(f"    [WARNING] Warning cancelling requests: {e}")
 
             # 3. EC2 인스턴스 종료
             if instance_ids_to_terminate:
