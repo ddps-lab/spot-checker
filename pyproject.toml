@@ -13,7 +13,8 @@ dependencies = [
     "boto3>=1.28.0",
     "pandas>=1.5.0",
     "pytz>=2023.3",
-    "variables>=0.0.1"
+    "variables>=0.0.1",
+    "requests>=2.31.0"
 ]
 
 [project.optional-dependencies]

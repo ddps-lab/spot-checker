@@ -60,6 +60,82 @@ python3 fis_tester.py --action run --experiment-type instance-reboot
 
 ---
 
+## 인스턴스 상태 모니터링 및 정리
+
+### check_instances.py - 인스턴스 상태 조회
+
+실행 중인 Spot 인스턴스의 상태를 한 눈에 확인합니다.
+
+```bash
+python3 check_instances.py
+```
+
+**조회 정보:**
+- Instance ID, Type, State (running/stopped/terminated)
+- Spot Request ID, Status (active/disabled/cancelled)
+- Request State (fulfilled/pending-evaluation/cancelled-terminating)
+- Interruption Behavior (stop/terminate)
+- Stop→Start 전환 횟수 (CloudWatch Logs 기반)
+- 모든 태그 정보
+
+**출력 형식:**
+```
+[running] i-0abc1234567890abc | Type: t2.micro      | AZ: us-east-1a
+  Instance Lifecycle: spot              | Launched: 2026-03-09 10:30:45 UTC
+  Valid Until: 2026-03-09 12:30:45 UTC  | Subnet: subnet-12345678
+  Spot Request ID: sir-0abc1234567890abc | Status: active
+  Request State: fulfilled                           | Interruption: stop
+    Spot Price: 0.0032
+  State Changes: 5 total | Stop->Start: 2x
+  Security Groups: sg-12345678
+  Tags: Environment=jglee-spot-test, Project=spot-checker-multinode
+```
+
+**사용 사례:**
+- FIS 실험 후 인스턴스 상태 확인
+- Spot 신호 감지 여부 검증
+- 중단/복구 횟수 추적
+
+---
+
+### clean_spot_instances.py - 인스턴스 정리
+
+모든 Spot 테스트 인스턴스를 일괄 정리합니다.
+
+```bash
+python3 clean_spot_instances.py
+```
+
+**동작:**
+1. 태그 필터로 Spot 인스턴스 검색 (`Environment={PREFIX}-spot-test`)
+2. Spot Instance Request 취소 (ValidUntil이 남아있을 수 있음)
+3. EC2 인스턴스 모두 Terminate
+
+**주의:**
+- 실행하면 **모든 인스턴스가 삭제됨** (되돌릴 수 없음)
+- 사전에 로그 수집 완료 필수
+- 확인 프롬프트 필수 (y/n)
+
+**단계별 정리:**
+```bash
+# 1단계: 실험 로그 수집
+python3 export_result.py
+
+# 2단계: 인스턴스 최종 상태 확인
+python3 check_instances.py
+
+# 3단계: 인스턴스 정리
+python3 clean_spot_instances.py
+
+# 4단계: Lambda 함수 정리
+python3 delete_tester.py
+
+# 5단계: CloudWatch Logs 정리
+python3 delete_log_group.py
+```
+
+---
+
 ## 실험 종료 후
 
 **삭제 전 실험 로그를 저장하였는지 확인 후 진행**
