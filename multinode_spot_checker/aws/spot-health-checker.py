@@ -8,7 +8,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 ### Spot Checker Mapping Data
 region_ami = pickle.load(open('./ami_az_data/region_ami_dict.pkl', 'rb'))  # {x86/arm: {region: (ami-id, ami-info), ...}}
 az_map_dict = pickle.load(open('./ami_az_data/az_map_dict.pkl', 'rb'))  # {(region, az-id): az-name, ...}
-arm64_family = ['a1', 't4g', 'c6g', 'c6gd', 'c6gn', 'c7g', 'c7gd', 'c7gn', 'im4gn', 'is4gen', 'm6g', 'm6gd', 'm7g', 'm7gd', 'm8g', 'r6g', 'r6gd', 'r7g', 'r7gd', 'r8g', 'x2gd']
+arm64_family = ['a1', 't4g', 'c6g', 'c6gd', 'c6gn', 'c7g', 'c7gd', 'c7gn', 'im4gn', 'is4gen', 'm6g', 'm6gd', 'm7g', 'm7gd', 'm8g', 'r6g', 'r6gd', 'r7g', 'r7gd', 'r8g', 'r8gn', 'x2gd']
 
 ### Spot Checker Arguments Parsing
 prefix = variables.prefix
@@ -161,7 +161,9 @@ if __name__ == "__main__":
     print(f"Launching in {len(regions)} region(s) in parallel...\n")
 
     # boto3는 병렬 스레드로 수행해도 safe
-    with ThreadPoolExecutor(max_workers=len(regions)) as executor:
+    # API rate limit 고려: Request Rate 5 req/sec, Resource Rate 1000 req/sec
+    max_workers = min(10, len(regions))  # 10개 초과 시 10으로 제한
+    with ThreadPoolExecutor(max_workers=max_workers) as executor:
         futures = [
             executor.submit(launch_in_region, r, a, instance_count)
             for r, a in zip(regions, az_ids)
