@@ -33,7 +33,7 @@ resource "aws_cloudwatch_event_rule" "eventbridge-rule" {
     source = ["aws.ec2"],
     detail-type = ["EC2 Instance State-change Notification"],
     detail = {
-      state = ["pending", "running", "shutting-down", "rebooting", "stopped", "terminated"]
+      state = ["pending", "running", "stopping", "stopped", "shutting-down", "terminated"]
     }
   })
 }
