@@ -57,7 +57,7 @@ def create_log_stream(log_group_name, log_stream_name, logs_client):
         print(f"Log stream {log_stream_name} already exists.")
 
 def main():
-    # Change this
+
     awscli_profile = variables.awscli_profile
     prefix = variables.prefix
     region = variables.region
@@ -183,7 +183,7 @@ def main():
 
         os.chdir(tf_project_dir)
 
-        run_command(["terraform", "workspace", "select", "-or-create", "spot-checker-multinode"])
+        run_command(["terraform", "workspace", "select", "-or-create", f"{region}-spot-checker-multinode"])
         run_command(["terraform", "init"])
 
         print(f"\n{'='*80}")

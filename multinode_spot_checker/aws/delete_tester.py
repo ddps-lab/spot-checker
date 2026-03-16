@@ -128,10 +128,10 @@ def main():
     else:
         boto3_session = boto3.Session(profile_name=awscli_profile, region_name=region)
         logs_client = boto3_session.client('logs')
-        run_command(["terraform", "workspace", "select", "-or-create", f"spot-checker-multinode"])
+        run_command(["terraform", "workspace", "select", "-or-create", f"{region}-spot-checker-multinode"])
         run_command(["terraform", "destroy", "--parallelism=150", "--target=module.spot-availability-tester", "--auto-approve", "--var", f"region={region}", "--var", f"prefix={prefix}","--var", f"awscli_profile={awscli_profile}", "--var", f"log_group_name={log_group_name}", "--var", f"log_stream_name_change_status={log_stream_name_change_status}", "--var", f"log_stream_name_init_time={log_stream_name_init_time}"])
 
-        run_command(["terraform", "workspace", "select", "-or-create", f"spot-checker-multinode"])
+        run_command(["terraform", "workspace", "select", "-or-create", f"{region}-spot-checker-multinode"])
         run_command(["terraform", "destroy", "--parallelism=150", "--auto-approve",
                     "--var", f"region={region}",
                     "--var", f"prefix={prefix}",
@@ -148,7 +148,7 @@ def main():
                     "--var", f"recent_window_minutes={recent_window_minutes}",
                     ])
         run_command(["terraform", "workspace", "select", "default"])
-        run_command(["terraform", "workspace", "delete", f"spot-checker-multinode"])
+        run_command(["terraform", "workspace", "delete", f"{region}-spot-checker-multinode"])
         delete_cloudwatch_log_group(f"/aws/lambda/{prefix}-spot-availability-tester", logs_client)
         delete_cloudwatch_log_group(f"/aws/lambda/{prefix}-terminate-no-name-instances", logs_client)
 
