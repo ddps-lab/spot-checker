@@ -15,11 +15,13 @@ resource "aws_lambda_function" "lambda" {
   handler       = "get-spot-status-change.lambda_handler"
   filename      = "get-spot-status-change.zip"
   role          = var.lambda_role_arn
+  source_code_hash = filebase64sha256("get-spot-status-change.zip")
 
   environment {
     variables = {
       LOG_GROUP_NAME    = var.log_group_name,
-      LOG_STREAM_NAME   = var.log_stream_name_chage_status,
+      LOG_STREAM_NAME   = var.log_stream_name_change_status,
+      PREFIX            = var.prefix,
     }
   }
 }
@@ -31,7 +33,7 @@ resource "aws_cloudwatch_event_rule" "eventbridge-rule" {
     source = ["aws.ec2"],
     detail-type = ["EC2 Instance State-change Notification"],
     detail = {
-      state = ["pending", "running", "shutting-down", "terminated"]
+      state = ["pending", "running", "stopping", "stopped", "shutting-down", "terminated"]
     }
   })
 }

@@ -4,7 +4,7 @@ import variables
 import os
 
 prefix = variables.prefix
-log_stream_name_chage_status = variables.log_stream_name_chage_status
+log_stream_name_change_status = variables.log_stream_name_change_status
 log_stream_name_init_time = variables.log_stream_name_init_time
 
 '''
@@ -25,7 +25,7 @@ for dir in listdir:
         log_dir.remove(".DS_Store")
     for json_dir in log_dir:
         index = json_dir.find(prefix)
-        change_status_json = f"./{json_dir}/{json_dir[:index]}{log_stream_name_chage_status}"
+        change_status_json = f"./{json_dir}/{json_dir[:index]}{log_stream_name_change_status}"
         init_time_json = f"./{json_dir}/{json_dir[:index]}{log_stream_name_init_time}"
         for file_path in [change_status_json, init_time_json]:
             with open(f"{file_path}.json", 'r') as json_file:
