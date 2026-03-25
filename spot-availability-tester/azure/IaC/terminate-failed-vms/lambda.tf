@@ -33,6 +33,7 @@ resource "aws_cloudwatch_event_rule" "eventbridge-rule" {
   name                = "${var.prefix}-terminate-failed-vms"
   description         = "Delete all spot-test-* VMs every 1 minute"
   schedule_expression = "rate(1 minute)"
+  state               = "DISABLED"  # 동기 삭제 전환으로 비활성화 (2026-03-02)
 }
 
 # Target for EventBridge to trigger Lambda

@@ -22,6 +22,7 @@ type WorkerPayload struct {
 	AvailabilityZone string `json:"availability_zone"`
 	DDDRequestTime   int64  `json:"ddd_request_time"`
 	RowIndex         int    `json:"row_index"`
+	HyperVGen        string `json:"hyper_v_gen,omitempty"`
 }
 
 type InvokeResult struct {
@@ -74,11 +75,16 @@ func loadCSV(filename string) ([]WorkerPayload, error) {
 		}
 
 		if len(record) >= 4 {
+			hvg := ""
+			if len(record) >= 5 {
+				hvg = record[4]
+			}
 			payloads = append(payloads, WorkerPayload{
 				InstanceType:     record[0] + "_" + record[1],
 				Region:           record[2],
 				AvailabilityZone: record[3],
 				RowIndex:         rowIndex,
+				HyperVGen:        hvg,
 			})
 			rowIndex++
 		}

@@ -57,12 +57,30 @@ def spot_log_parse_log_data_to_csv(input_file, output_file):
 
     with open(output_file, 'w', newline='') as f:
         writer = csv.writer(f)
-        writer.writerow(["InstanceType", "AZ", "Timestamp", "Code", "RawCode", "RequestCreateTime", "StatusUpdateTime"])  # 헤더
+        writer.writerow(["InstanceType", "AZ", "Timestamp", "Code", "RawCode", "ResponseTime", "PollerStatus", "RequestCreateTime", "StatusUpdateTime", "DDDRequestTime", "Region", "Error", "PowerState", "DescribeProvisioningState", "AllStatusCodes", "DescribeResponseTime", "DescribeError"])  # 헤더
 
         for line in lines:
             log_timestamp, log_data = line.split(' ', 1)
             log_json = json.loads(log_data.strip())
-            writer.writerow([log_json['InstanceType'], log_json['AZ'], log_json['Timestamp'], log_json['Code'], log_json['RawCode'], log_json['RequestCreateTime'], log_json['StatusUpdateTime']])
+            writer.writerow([
+                log_json.get('InstanceType', ''),
+                log_json.get('AZ', ''),
+                log_json.get('Timestamp', ''),
+                log_json.get('Code', ''),
+                log_json.get('RawCode', ''),
+                log_json.get('ResponseTime', ''),
+                log_json.get('PollerStatus', ''),
+                log_json.get('RequestCreateTime', ''),
+                log_json.get('StatusUpdateTime', ''),
+                log_json.get('DDDRequestTime', ''),
+                log_json.get('Region', ''),
+                log_json.get('Error', ''),
+                log_json.get('PowerState', ''),
+                log_json.get('DescribeProvisioningState', ''),
+                log_json.get('AllStatusCodes', ''),
+                log_json.get('DescribeResponseTime', ''),
+                log_json.get('DescribeError', ''),
+            ])
 
 def terminate_log_parse_log_data_to_csv(input_file, output_file):
     with open(input_file, 'r') as f:
@@ -70,25 +88,43 @@ def terminate_log_parse_log_data_to_csv(input_file, output_file):
 
     with open(output_file, 'w', newline='') as f:
         writer = csv.writer(f)
-        writer.writerow(["LaunchTime", "TerminateTime", "BillingTime", "InstanceId", "InstanceState", "InstanceType", "AvailabilityZone"])  # 헤더
+        writer.writerow(["Timestamp", "ResourceGroup", "DiskName", "Location", "DiskSizeGB", "DiskState", "ManagedBy", "Reason"])  # Azure 디스크 정리 로그 헤더
 
         for line in lines:
             log_timestamp, log_data = line.split(' ', 1)
             log_json = json.loads(log_data.strip())
-            writer.writerow([log_json['LaunchTime'], log_json['TerminateTime'], log_json['BillingTime'], log_json['InstanceId'], log_json['InstanceState'], log_json['InstanceType'], log_json['AvailabilityZone']])
+            writer.writerow([
+                log_json.get('Timestamp', ''),
+                log_json.get('ResourceGroup', ''),
+                log_json.get('DiskName', ''),
+                log_json.get('Location', ''),
+                log_json.get('DiskSizeGB', ''),
+                log_json.get('DiskState', ''),
+                log_json.get('ManagedBy', ''),
+                log_json.get('Reason', ''),
+            ])
 
 def pending_log_parse_log_data_to_csv(input_file, output_file):
     with open(input_file, 'r') as f:
         lines = f.readlines()
 
+    if not lines:
+        # Azure에서는 pending 로그가 비어있을 수 있음
+        return
+
     with open(output_file, 'w', newline='') as f:
         writer = csv.writer(f)
-        writer.writerow(["Timestamp", "InstanceId", "InstanceState", "Region"])  # 헤더
+        # 첫 번째 레코드에서 키를 동적으로 추출
+        first_line = lines[0]
+        _, first_data = first_line.split(' ', 1)
+        first_json = json.loads(first_data.strip())
+        headers = list(first_json.keys())
+        writer.writerow(headers)
 
         for line in lines:
             log_timestamp, log_data = line.split(' ', 1)
             log_json = json.loads(log_data.strip())
-            writer.writerow([log_json['Timestamp'], log_json['InstanceId'], log_json['InstanceState'], log_json['Region']])
+            writer.writerow([log_json.get(h, '') for h in headers])
 
 #수정 필요
 def download_result(s3_client, bucket_name, log_stream_name, log_type, region, result_folder_path):
@@ -121,8 +157,9 @@ def download_result(s3_client, bucket_name, log_stream_name, log_type, region, r
         else:
             pending_log_parse_log_data_to_csv(f"/tmp/spot-availability-test/{region}/{log_type}/{file_name}", f"./result_data/{result_folder_path}/{region}/{log_type}/{file_name}.csv")
     
-    df_list = [pd.read_csv(f"./result_data/{result_folder_path}/{region}/{log_type}/{file}.csv") for file in file_names]
+    df_list = [pd.read_csv(f"./result_data/{result_folder_path}/{region}/{log_type}/{file}.csv") for file in file_names if os.path.exists(f"./result_data/{result_folder_path}/{region}/{log_type}/{file}.csv")]
     if not df_list:
+        print(f"Region {region} {log_type} log: no data found, skipping.")
         return 0
     combined_df = pd.concat(df_list, ignore_index=True)
     combined_df.to_csv(f'./result_data/{result_folder_path}/{region}/{log_type}/result.csv', index=False)
@@ -183,12 +220,8 @@ def main():
         empty_s3_bucket(f"{prefix}-spot-availability-tester-log-{region}", s3_resource)
         export_logs_to_s3(boto3_session, log_group_name, milliseconds_start_time, milliseconds_end_time, f"{prefix}-spot-availability-tester-log-{region}", "spot-availability-test", region)
         download_result(s3_client, f"{prefix}-spot-availability-tester-log-{region}", spot_log_stream_name, "spot", region, result_folder_path)
-        download_result(s3_client, f"{prefix}-spot-availability-tester-log-{region}", terminate_log_stream_name, "terminate", region, result_folder_path)
-        download_result(s3_client, f"{prefix}-spot-availability-tester-log-{region}", pending_log_stream_name, "pending", region, result_folder_path)
 
     merge_csv_files("spot", regions, result_folder_path)
-    merge_csv_files("terminate", regions, result_folder_path)
-    merge_csv_files("pending", regions, result_folder_path)
 
 if __name__ == "__main__":
     main()

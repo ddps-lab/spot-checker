@@ -12,11 +12,12 @@ resource "aws_lambda_function" "lambda" {
   function_name = "${var.prefix}-spot-availability-tester"
   architectures = ["x86_64"]
   memory_size   = 128
-  timeout       = 60
+  timeout       = 180
   runtime       = "python3.11"
   handler       = "spot-availability-tester-ec2.lambda_handler" # Azure VM 테스트용 (고정)
-  filename      = "spot-availability-tester.zip"
-  role          = var.lambda_role_arn
+  filename         = data.archive_file.lambda_source_code.output_path
+  source_code_hash = data.archive_file.lambda_source_code.output_base64sha256
+  role             = var.lambda_role_arn
   layers        = [var.azure_sdk_layer_arn]
 
   environment {

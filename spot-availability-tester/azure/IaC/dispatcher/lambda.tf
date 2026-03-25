@@ -5,7 +5,7 @@ resource "aws_lambda_function" "dispatcher" {
   runtime       = "provided.al2023"
   architectures = ["x86_64"]
   memory_size   = 3008
-  timeout       = 60
+  timeout       = 240
 
   filename         = "${path.module}/dispatcher.zip"
   source_code_hash = filebase64sha256("${path.module}/dispatcher.zip")
