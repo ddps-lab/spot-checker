@@ -344,9 +344,13 @@ def main():
         print(f"📦 리전: {region} {'(Azure 리소스 생성)' if is_first_region else ''}")
         print("=" * 60)
 
-        # Terraform workspace 생성
+        # Terraform workspace 생성 (이미 존재하면 select)
         print(f"\n1. Terraform workspace 생성: {region}")
-        run_command(["terraform", "workspace", "new", f"{region}"])
+        result = subprocess.run(["terraform", "workspace", "new", f"{region}"],
+                               capture_output=True, text=True, cwd=os.path.join(os.path.dirname(__file__), "IaC"))
+        if result.returncode != 0 and "already exists" in result.stderr:
+            print(f"   Workspace '{region}' already exists, selecting...")
+            run_command(["terraform", "workspace", "select", f"{region}"])
 
         # Terraform 초기화
         print(f"\n2. Terraform 초기화")
